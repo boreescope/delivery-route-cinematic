@@ -1,0 +1,62 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>13 Cartogram</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0a0a;overflow:hidden;font-family:-apple-system,sans-serif}
+#map{position:absolute;inset:0;background:#0a0a0a}
+#label{position:absolute;left:24px;bottom:20px;z-index:1000;color:#fff;font-size:13px;background:rgba(0,0,0,.55);padding:10px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(6px)}
+#label b{font-size:16px;display:block;margin-bottom:3px;font-weight:700}
+#label span{color:#bbb}
+</style></head><body>
+<div id="map"></div>
+<div id="label"><b>13. Dorling Cartogram — 주문량이 면적이 됨</b><span>자치구 중심에 원. 반지름=실제 배달 수.</span></div>
+<script src="_common.js"></script>
+<script>
+const map = initMap('map', {zoom: 10.8});
+
+function pip(pt, poly){
+  let inside=false;
+  for (let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i][0], yi=poly[i][1], xj=poly[j][0], yj=poly[j][1];
+    const intersect = ((yi>pt[1])!=(yj>pt[1])) && (pt[0] < (xj-xi)*(pt[1]-yi)/(yj-yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+Promise.all([
+  fetch('https://raw.githubusercontent.com/southkorea/seoul-maps/master/kostat/2013/json/seoul_municipalities_geo_simple.json').then(r=>r.json()),
+  loadDeliveries()
+]).then(([geo, data]) => {
+  geo.features.forEach(f => {
+    f.properties._cnt = 0;
+    const polys = f.geometry.type==='Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    const ring = polys[0][0];
+    let cx=0, cy=0;
+    ring.forEach(p => { cx+=p[0]; cy+=p[1]; });
+    f.properties._c = [cx/ring.length, cy/ring.length];
+  });
+  data.forEach(d => {
+    for (const f of geo.features) {
+      const polys = f.geometry.type==='Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      let hit=false;
+      for (const mp of polys) if (pip(d.d, mp[0])) { hit=true; break; }
+      if (hit) { f.properties._cnt++; break; }
+    }
+  });
+  const max = Math.max(...geo.features.map(f=>f.properties._cnt));
+
+  L.geoJSON(geo, { style:{color:'#333', weight:0.5, fillOpacity:0} }).addTo(map);
+
+  geo.features.forEach(f => {
+    const t = f.properties._cnt/max;
+    const radius = 400 + t*2500;
+    const r = Math.floor(60+195*t), g=Math.floor(40+60*(1-t)), b=Math.floor(200-100*t);
+    L.circle(ll(f.properties._c), {
+      radius, color:'#fff', weight:1,
+      fillColor:`rgb(${r},${g},${b})`, fillOpacity:0.78
+    }).addTo(map);
+  });
+});
+</script></body></html>

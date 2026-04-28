@@ -1,0 +1,31 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>02 Trips</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0a0a;overflow:hidden;font-family:-apple-system,sans-serif}
+#map{position:absolute;inset:0;background:#0a0a0a}
+#label{position:absolute;left:24px;bottom:20px;z-index:1000;color:#fff;font-size:13px;background:rgba(0,0,0,.55);padding:10px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(6px)}
+#label b{font-size:16px;display:block;margin-bottom:3px;font-weight:700}
+#label span{color:#bbb}
+</style></head><body>
+<div id="map"></div>
+<div id="label"><b>02. Trip — 시간대별 궤적</b><span>실제 pickup→handover 직선. 색상은 소요시간(청→적).</span></div>
+<script src="_common.js"></script>
+<script>
+const map = initMap('map');
+loadDeliveries().then(data => {
+  const durs = data.map(d=>d.dur).sort((a,b)=>a-b);
+  const q50 = durs[Math.floor(durs.length*0.5)];
+  const q90 = durs[Math.floor(durs.length*0.9)];
+  data.forEach(d => {
+    // 소요시간 기반 색
+    const t = Math.min(d.dur/q90, 1);
+    const r = Math.floor(0 + 255*t), g = Math.floor(200*(1-t) + 40*t), b = Math.floor(255*(1-t));
+    L.polyline([ll(d.s), ll(d.d)], {
+      color: `rgb(${r},${g},${b})`,
+      weight: 0.6, opacity: 0.55
+    }).addTo(map);
+  });
+});
+</script></body></html>

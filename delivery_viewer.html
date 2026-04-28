@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>배달 경로 뷰어</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-minimap@3.6.1/dist/Control.MiniMap.min.css"/>
+<style>
+  body{margin:0;font-family:-apple-system,sans-serif}
+  #map{position:absolute;top:0;left:0;right:0;bottom:0}
+  #panel{position:absolute;top:16px;left:16px;z-index:1000;background:#fff;padding:16px 20px;
+    border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.15);max-width:340px}
+  #panel h2{margin:0 0 10px;font-size:16px}
+  #file{margin-bottom:8px}
+  #status{font-size:13px;color:#666;margin-top:8px}
+  #count{font-size:12px;color:#999;margin-top:4px}
+  #qbtn{position:absolute;top:16px;right:16px;z-index:1000;background:#fff;border:none;padding:10px 16px;
+    border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);cursor:pointer;font-size:14px;font-family:inherit}
+  #qbtn:hover{background:#f5f5f5}
+  #modal-bg{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:2000;align-items:center;justify-content:center}
+  #modal-bg.show{display:flex}
+  #modal{background:#fff;border-radius:14px;padding:24px 28px;max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2);font-size:13px}
+  #modal h3{margin:0 0 16px;font-size:16px}
+  #modal label{display:block;margin:10px 0 4px;font-weight:600;color:#555}
+  #modal select,#modal input{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;font-family:inherit}
+  #modal .row2{display:flex;gap:10px}
+  #modal .row2>*{flex:1}
+  #modal textarea{width:100%;height:120px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:12px;font-family:'SF Mono',Monaco,monospace;resize:vertical;box-sizing:border-box;background:#f8f8f8}
+  #modal .btns{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+  #modal .btns button{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-family:inherit}
+  #modal .btn-gen{background:#333;color:#fff}
+  #modal .btn-gen:hover{background:#555}
+  #modal .btn-copy{background:#e8e8e8}
+  #modal .btn-copy:hover{background:#ddd}
+  #modal .btn-close{background:none;color:#999;font-size:12px}
+  #loading-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+  #loading-overlay.hidden{display:none}
+  #loading-overlay .spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+  #loading-overlay .text{color:#fff;font-size:14px;font-weight:500}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #playbar{display:none;position:fixed;bottom:0;left:0;right:0;z-index:1000;background:#fff;padding:10px 20px;box-shadow:0 -2px 12px rgba(0,0,0,.15);font-size:13px;font-family:inherit}
+  #playbar.show{display:flex;align-items:center;gap:12px}
+  #playbar button{background:none;border:1px solid #ddd;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;font-family:inherit}
+  #playbar button.active{background:#333;color:#fff;border-color:#333}
+  #playbar button:hover{background:#f0f0f0}
+  #playbar button.active:hover{background:#555}
+  #playbar .seek{flex:1;height:6px;cursor:pointer;accent-color:#333}
+  #playbar .time{min-width:80px;text-align:center;font-weight:600;color:#333;font-size:12px}
+  #playbar .speed{min-width:40px;text-align:center;font-size:12px;color:#666}
+  #toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.75);color:#fff;padding:12px 24px;border-radius:10px;font-size:14px;z-index:9998;display:none;pointer-events:none}
+  #deck-tooltip{position:fixed;z-index:10000;background:rgba(0,0,0,.8);color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;pointer-events:none;display:none;white-space:nowrap;font-family:-apple-system,sans-serif}
+  #theme-panel{position:absolute;top:auto;left:16px;z-index:1000;background:#fff;padding:14px 18px;
+    border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.15);max-width:340px;font-size:13px}
+  #theme-panel .tp-title{font-weight:600;font-size:13px;margin:0 0 10px;color:#333}
+  #theme-panel label{display:block;margin:8px 0 4px;font-weight:500;color:#666;font-size:12px}
+  #theme-panel select{width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box}
+  #theme-panel.disabled{opacity:.5;pointer-events:none}
+</style>
+</head><body>
+<div id="loading-overlay"><div class="spinner"></div><div class="text">🛵 OSRM 라우팅 서버 연결 중...</div></div>
+<div id="toast"></div>
+<div id="deck-tooltip"></div>
+<div id="map"></div>
+<div id="panel">
+  <h2>🛵 배달 트래픽 뷰어</h2>
+  <input type="file" id="file" accept=".csv">
+  <div id="status">CSV 파일을 업로드하세요</div>
+  <div id="count"></div>
+</div>
+<div id="theme-panel">
+  <div class="tp-title">🎨 테마</div>
+  <label>선 색상</label>
+  <select id="t-line">
+    <option value="default">기본 (랜덤 팔레트)</option>
+    <option value="rainbow">무지개</option>
+    <option value="mint">민트</option>
+  </select>
+  <label>지도</label>
+  <select id="t-map">
+    <option value="light">라이트</option>
+    <option value="dark">다크</option>
+    <option value="voyager">보야저</option>
+    <option value="satellite">위성</option>
+  </select>
+</div>
+<button id="qbtn" onclick="document.getElementById('modal-bg').classList.add('show')">📋 쿼리 생성</button>
+<div id="modal-bg">
+  <div id="modal">
+    <h3>📋 배달 데이터 쿼리 생성</h3>
+    <label>광역시/도</label>
+    <select id="q-rgn1" onchange="updateRgn2()">
+      <option value="">전국</option>
+    </select>
+    <label>시군구</label>
+    <select id="q-rgn2">
+      <option value="">전체</option>
+    </select>
+    <div class="row2">
+      <div><label>시작일</label><input type="date" id="q-date-from" value="2026-04-08"></div>
+      <div><label>종료일</label><input type="date" id="q-date-to" value="2026-04-08"></div>
+    </div>
+    <div class="row2">
+      <div><label>LIMIT</label><input type="number" id="q-limit" min="1" max="100000" step="100" value="500"></div>
+    </div>
+    <div class="row2">
+      <div><label>시작 시간</label><select id="q-hour-from"><option value="">전체</option></select></div>
+      <div><label>종료 시간</label><select id="q-hour-to"><option value="">전체</option></select></div>
+    </div>
+    <label>생성된 쿼리</label>
+    <textarea id="q-result" readonly></textarea>
+    <div class="btns">
+      <button class="btn-close" onclick="document.getElementById('modal-bg').classList.remove('show')">닫기</button>
+      <button class="btn-gen" onclick="generateQuery()">쿼리 생성</button>
+      <button class="btn-copy" onclick="copyQuery()">복사</button>
+    </div>
+  </div>
+</div>
+<div id="playbar">
+  <button id="pb-rev" title="역재생">◀◀</button>
+  <button id="pb-play" title="재생/정지">▶</button>
+  <button id="pb-reset" title="처음으로">⏮</button>
+  <span class="time" id="pb-time">00:00</span>
+  <input type="range" class="seek" id="pb-seek" min="0" max="1000" value="0">
+  <span class="speed" id="pb-speed">1x</span>
+  <button id="pb-slower">−</button>
+  <button id="pb-faster">+</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@mapbox/polyline@1.2.1/src/polyline.js"></script>
+<script src="https://unpkg.com/leaflet-minimap@3.6.1/dist/Control.MiniMap.min.js"></script>
+<script src="https://unpkg.com/deck.gl@9.1.4/dist.min.js"></script>
+<script>
+// ===== Leaflet 지도 초기화 =====
+const map=L.map('map',{zoomControl:false,zoomAnimation:false,fadeAnimation:false}).setView([37.51,127.1],13);
+L.control.zoom({position:'bottomright'}).addTo(map);
+const MAP_TILES={
+  light:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  dark:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  voyager:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  satellite:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+};
+let currentTileLayer=L.tileLayer(MAP_TILES.light,{maxZoom:19}).addTo(map);
+
+// 미니맵
+const miniTile=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19});
+new L.Control.MiniMap(miniTile,{toggleDisplay:true,minimized:false,position:'bottomleft',width:160,height:160,zoomLevelOffset:-5}).addTo(map);
+
+// OSRM 서버 연결 체크
+(async function checkOSRM(){
+  const overlay=document.getElementById('loading-overlay');
+  for(let i=0;i<30;i++){
+    try{
+      const r=await fetch('https://solebal.synology.me:5052/route/v1/driving/127.1,37.5;127.2,37.5?overview=false');
+      const j=await r.json();
+      if(j.code==='Ok'){overlay.classList.add('hidden');return;}
+    }catch(e){}
+    await new Promise(ok=>setTimeout(ok,2000));
+  }
+  overlay.querySelector('.text').textContent='!! OSRM 서버 연결 실패. 페이지를 새로고침 해주세요.';
+})();
+
+const statusEl=document.getElementById('status');
+const countEl=document.getElementById('count');
+const tooltipEl=document.getElementById('deck-tooltip');
+let _generationId=0; // 새 CSV 로드 시 증가 → 이전 애니메이션 중단
+let _skipAnimation=false; // 탭 복귀 시 true → 애니메이션 즉시 완료
+let _rendering=false; // 렌더링 중 여부
+const SCALE=10000/3600000;
+const BREAK_PROB=0.02;
+const MAX_LINE_LEN=50;
+const PATH_WIDTH=5;
+const DOT_RADIUS=2.5;
+const ENDPOINT_RADIUS=4.5;
+const OUTLINE_ADD=3;
+
+// ===== 색상 팔레트 =====
+const PALETTE=['#4dd0e1','#81c784','#aed581','#fff176','#4fc3f7','#80deea','#a5d6a7','#c5e1a5','#dce775','#fff59d',
+  '#f48fb1','#ce93d8','#b39ddb','#9fa8da','#90caf9','#80cbc4','#ef9a9a','#ffcc80','#ffe082','#ffab91',
+  '#7986cb','#64b5f6','#4db6ac','#ff8a65','#ba68c8','#f06292','#ffd54f','#81d4fa','#ffb74d','#e57373',
+  '#e53935','#d81b60','#8e24aa','#5e35b1','#3949ab','#1e88e5','#039be5','#00acc1','#00897b','#43a047',
+  '#7cb342','#c0ca33','#fdd835','#ffb300','#fb8c00','#f4511e','#6d4c41','#546e7a','#78909c','#26a69a',
+  '#ec407a','#ab47bc','#7e57c2','#5c6bc0','#42a5f5','#26c6da','#66bb6a','#9ccc65','#d4e157','#ffee58'];
+function randColor(){return PALETTE[Math.floor(Math.random()*PALETTE.length)];}
+
+// 무지개 팔레트 (HSL 기반, 인덱스/총수로 균등 분배)
+function rainbowColor(i,total){
+  const hue=Math.round((i/Math.max(total,1))*360)%360;
+  return 'hsl('+hue+',75%,55%)';
+}
+
+// 테마별 색상 반환
+function getThemeColor(i,total){
+  const theme=document.getElementById('t-line').value;
+  if(theme==='rainbow') return rainbowColor(i,total);
+  if(theme==='mint') return '#0CEFD3';
+  return randColor();
+}
+
+// HSL 문자열 → [r,g,b]
+function hslToRgb(h,s,l){
+  s/=100;l/=100;
+  const a=s*Math.min(l,1-l);
+  const f=n=>{const k=(n+h/30)%12;return l-a*Math.max(Math.min(k-3,9-k,1),-1);};
+  return [Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)];
+}
+
+// 색상 hex/hsl -> [r,g,b]
+function hexToRgb(hex){
+  if(hex.startsWith('hsl')){
+    const m=hex.match(/hsl\((\d+),\s*(\d+)%?,\s*(\d+)%?\)/);
+    if(m) return hslToRgb(+m[1],+m[2],+m[3]);
+  }
+  const n=parseInt(hex.slice(1),16);
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+
+// ===== 유틸리티 =====
+function parseTS(s){if(!s)return null;return new Date(s.replace(' ','T').replace(/\.?\d{0,6}$/,''))}
+function fmtDur(ms){const m=Math.round(ms/60000);return m<60?m+'분':Math.floor(m/60)+'시간 '+m%60+'분'}
+function parseCSV(text){
+  const lines=text.trim().split('\n');
+  const header=lines[0].replace(/["\uFEFF]/g,'').split(',');
+  return lines.slice(1).map(line=>{
+    const vals=line.replace(/"/g,'').split(',');
+    const obj={};header.forEach((h,i)=>obj[h.trim()]=vals[i]?.trim());return obj;
+  });
+}
+
+// ===== OSRM 라우팅 + 캐시 =====
+const routeCache={};
+async function getRoute(slat,slon,dlat,dlon){
+  const key=slat+','+slon+','+dlat+','+dlon;
+  if(routeCache[key]) return JSON.parse(JSON.stringify(routeCache[key]));
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      const r=await fetch('https://solebal.synology.me:5052/route/v1/driving/'+slon+','+slat+';'+dlon+','+dlat+'?overview=full&geometries=polyline');
+      const j=await r.json();
+      if(j.code==='Ok'){
+        const result={coords:polyline.decode(j.routes[0].geometry).map(c=>[c[0],c[1]]),dist:j.routes[0].distance};
+        routeCache[key]=result;
+        return JSON.parse(JSON.stringify(result));
+      }
+    }catch(e){console.warn('OSRM retry '+(attempt+1)+'/3:',e);}
+    await new Promise(ok=>setTimeout(ok,500*(attempt+1)));
+  }
+  return null;
+}
+
+// 경로에 랜덤 오프셋 적용 (겹침 방지)
+function offsetCoords(coords){
+  const dx=(Math.random()-0.5)*0.0003;
+  const dy=(Math.random()-0.5)*0.0003;
+  return coords.map(c=>[c[0]+dy,c[1]+dx]);
+}
+
+// 두 좌표 사이 거리 (미터 근사)
+function approxDist(a,b){
+  const dlat=(b[0]-a[0])*111320;
+  const dlon=(b[1]-a[1])*111320*Math.cos(a[0]*Math.PI/180);
+  return Math.sqrt(dlat*dlat+dlon*dlon);
+}
+
+// 두 좌표 사이를 보간하여 점 배열 생성
+function interpolateDots(from,to,congestion){
+  const dist=approxDist(from,to);
+  if(dist<1) return [from];
+  const baseGap=8+Math.random()*12;
+  const gap=Math.max(2, baseGap*(1-congestion*0.85));
+  const n=Math.max(1, Math.floor(dist/gap));
+  const pts=[];
+  for(let k=0;k<=n;k++){
+    const t=k/n;
+    const jt=k===0||k===n ? t : t+(Math.random()-0.5)*0.3/n;
+    pts.push([from[0]+(to[0]-from[0])*jt, from[1]+(to[1]-from[1])*jt]);
+  }
+  return pts;
+}
+
+// 세그먼트 빌더: 선 구간 + 점 구간
+function buildSegments(coords){
+  const segs=[];
+  let i=0;
+  while(i<coords.length){
+    if(i>0 && Math.random()<BREAK_PROB){
+      const n=2+Math.floor(Math.random()*5);
+      const end=Math.min(i+n,coords.length);
+      const congestion=Math.random();
+      const dots=[];
+      for(let d=i;d<end-1;d++){
+        const seg=interpolateDots(coords[d],coords[d+1],congestion);
+        dots.push(...(dots.length?seg.slice(1):seg));
+      }
+      if(dots.length===0) dots.push(coords[i]);
+      segs.push({type:'dots',coords:dots});
+      i=end-1;
+    } else {
+      const maxLen=Math.floor(5+Math.random()*MAX_LINE_LEN);
+      const end=Math.min(i+maxLen,coords.length);
+      if(end-i>=2){
+        segs.push({type:'line',coords:coords.slice(i,end)});
+        i=end-1;
+      } else {
+        segs.push({type:'dots',coords:[coords[i]]});
+        i++;
+      }
+    }
+    if(i<=0)i=1;
+  }
+  return segs;
+}
+
+// ===== deck.gl 데이터 저장소 =====
+// pathData: [{id, path, color, width, tipText, groupId, groupOrder}]
+// dotData: [{position, color, radius, tipText, groupId, groupOrder}]
+// endpointData: [{position, color, radius, tipText, groupId, groupOrder, label}]
+let pathData=[];
+let dotData=[];
+let endpointData=[];
+let hoveredGroupId=null;
+let clickedGroupId=null;
+let routeMetadata={};  // groupId -> {coords, color, tipText, durationMs}
+let groupOrderCounter=0;
+let groupOrderMap={};  // groupId -> order number
+
+// deck.gl 레이어 업데이트 (throttle + visibility 가드)
+let _deckUpdatePending=false;
+let _lastDeckUpdate=0;
+let _deckTrailingTimer=0;
+let _deckRevision=0; // 데이터 변경 감지용 리비전 카운터
+const DECK_UPDATE_MIN_INTERVAL=30; // ms
+function scheduleDeckUpdate(){
+  if(_deckUpdatePending) return;
+  if(document.hidden) return; // 탭 비활성 → 스킵
+  _deckUpdatePending=true;
+  requestAnimationFrame(()=>{
+    _deckUpdatePending=false;
+    const now=performance.now();
+    const elapsed=now-_lastDeckUpdate;
+    if(elapsed>=DECK_UPDATE_MIN_INTERVAL){
+      _lastDeckUpdate=now;
+      updateDeckLayers();
+    } else {
+      // throttle에 걸림 → trailing 타이머로 보장
+      if(!_deckTrailingTimer){
+        _deckTrailingTimer=setTimeout(()=>{
+          _deckTrailingTimer=0;
+          _lastDeckUpdate=performance.now();
+          updateDeckLayers();
+        }, DECK_UPDATE_MIN_INTERVAL-elapsed);
+      }
+    }
+  });
+}
+
+function updateDeckLayers(){
+  if(!window.deckOverlay) return;
+  if(pathData.length===0&&dotData.length===0&&endpointData.length===0){
+    window.deckOverlay.setProps({layers:[],viewState:getLeafletViewState()});
+    return;
+  }
+  const hl=hoveredGroupId||clickedGroupId;
+  const z=map.getZoom();
+  const sc=Math.pow(2,(z-14)*0.4);
+  const rev=++_deckRevision;
+
+  // 타입별 통합 레이어 4개
+  const layers=[];
+
+  // 매번 새 배열 참조를 넘겨야 deck.gl이 데이터 변경을 감지함
+  const curPath=[...pathData];
+  const curDot=[...dotData];
+  const curEp=[...endpointData];
+
+  if(curPath.length){
+    layers.push(new deck.PathLayer({
+      id:'outline-all',
+      data:curPath,
+      getPath:d=>d.path,
+      getColor:d=>{
+        if(hl && d.groupId===hl) return [255,255,255,255];
+        if(hl) return [85,85,85,140];
+        return [85,85,85,255];
+      },
+      getWidth:d=>{
+        if(hl && d.groupId===hl) return (d.width*2+OUTLINE_ADD+2)*sc;
+        return (d.width+OUTLINE_ADD)*sc;
+      },
+      widthUnits:'pixels',widthMinPixels:1,widthMaxPixels:40,
+      jointRounded:true,capRounded:true,pickable:false,
+      updateTriggers:{getColor:[hl],getWidth:[hl,sc],getPath:[rev]}
+    }));
+    layers.push(new deck.PathLayer({
+      id:'path-all',
+      data:curPath,
+      getPath:d=>d.path,
+      getColor:d=>{
+        if(hl && d.groupId===hl) return [...d.color,255];
+        if(hl) return [...d.color,160];
+        return [...d.color,255];
+      },
+      getWidth:d=>{
+        if(hl && d.groupId===hl) return d.width*2*sc;
+        return d.width*sc;
+      },
+      widthUnits:'pixels',widthMinPixels:1,widthMaxPixels:30,
+      jointRounded:true,capRounded:true,pickable:true,autoHighlight:false,
+      updateTriggers:{getColor:[hl],getWidth:[hl,sc],getPath:[rev]}
+    }));
+  }
+  if(curDot.length){
+    layers.push(new deck.ScatterplotLayer({
+      id:'dot-all',
+      data:curDot,
+      getPosition:d=>d.position,
+      getFillColor:d=>{
+        if(hl && d.groupId===hl) return [...d.color,255];
+        if(hl) return [...d.color,160];
+        return [...d.color,255];
+      },
+      getRadius:d=>{
+        if(hl && d.groupId===hl) return d.radius*1.5*sc;
+        return d.radius*sc;
+      },
+      radiusUnits:'pixels',radiusMinPixels:1,radiusMaxPixels:20,
+      pickable:true,autoHighlight:false,
+      getLineColor:[85,85,85,255],getLineWidth:1.5*sc,
+      lineWidthUnits:'pixels',stroked:true,
+      updateTriggers:{getFillColor:[hl],getRadius:[hl,sc]}
+    }));
+  }
+  if(curEp.length){
+    layers.push(new deck.ScatterplotLayer({
+      id:'ep-all',
+      data:curEp,
+      getPosition:d=>d.position,
+      getFillColor:d=>{
+        if(hl && d.groupId===hl) return [...d.color,255];
+        if(hl) return [...d.color,160];
+        return [...d.color,255];
+      },
+      getRadius:d=>{
+        if(hl && d.groupId===hl) return d.radius*1.8*sc;
+        return d.radius*sc;
+      },
+      radiusUnits:'pixels',radiusMinPixels:1,radiusMaxPixels:24,
+      pickable:true,autoHighlight:false,
+      getLineColor:d=>{
+        if(hl && d.groupId===hl) return [255,255,255,255];
+        return [85,85,85,255];
+      },
+      getLineWidth:d=>{
+        if(hl && d.groupId===hl) return 3*sc;
+        return 1.5*sc;
+      },
+      lineWidthUnits:'pixels',stroked:true,
+      updateTriggers:{getFillColor:[hl],getRadius:[hl,sc],getLineColor:[hl],getLineWidth:[hl,sc]}
+    }));
+  }
+
+  window.deckOverlay.setProps({layers,viewState:getLeafletViewState()});
+}
+
+// ===== deck.gl Leaflet 오버레이 초기화 (수동 동기화) =====
+const deckContainer=document.createElement('div');
+deckContainer.id='deck-canvas';
+deckContainer.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:450;';
+map.getContainer().appendChild(deckContainer);
+
+function getLeafletViewState(){
+  const c=map.getCenter();
+  const size=map.getSize();
+  // Leaflet zoom은 deck.gl보다 1 높음
+  return{longitude:c.lng,latitude:c.lat,zoom:map.getZoom()-1,pitch:0,bearing:0};
+}
+
+window.deckOverlay=new deck.Deck({
+  parent:deckContainer,
+  initialViewState:getLeafletViewState(),
+  controller:false,
+  layers:[],
+  width:'100%',
+  height:'100%',
+  pickingRadius:8,
+  getTooltip:null,
+  getCursor:({isHovering})=>isHovering?'pointer':'inherit',
+  onHover:info=>{
+    if(info.object){
+      hoveredGroupId=info.object.groupId;
+      tooltipEl.style.display='block';
+      tooltipEl.style.left=(info.x+12)+'px';
+      tooltipEl.style.top=(info.y-12)+'px';
+      tooltipEl.textContent=info.object.tipText+(info.object.label?' '+info.object.label:'');
+    }else{
+      hoveredGroupId=null;
+      tooltipEl.style.display='none';
+    }
+    updateDeckLayers();
+  },
+  onClick:info=>{
+    if(info.object){
+      clickedGroupId=info.object.groupId;
+      replayRoute(info.object.groupId);
+    }else{
+      clickedGroupId=null;
+      updateDeckLayers();
+    }
+  },
+  onAfterRender:()=>{
+    // deck.gl이 자체 canvas를 생성하므로 pointer-events 설정
+    const c=deckContainer.querySelector('canvas');
+    if(c&&c.style.pointerEvents!=='none') c.style.pointerEvents='none';
+  }
+});
+
+// deck.gl 내부 canvas에서 마우스 이벤트가 Leaflet으로 전달되도록
+deckContainer.style.pointerEvents='none';
+
+function syncDeckView(){
+  if(window.deckOverlay) window.deckOverlay.setProps({viewState:getLeafletViewState()});
+}
+map.on('move',syncDeckView);
+map.on('zoom',syncDeckView);
+map.on('resize',syncDeckView);
+map.on('zoomend',()=>scheduleDeckUpdate());
+map.on('moveend',()=>scheduleDeckUpdate());
+// 초기 동기화
+setTimeout(syncDeckView,100);
+
+// 탭 복귀 시 진행 중 애니메이션 즉시 완료 → rAF 폭주 방지
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden){
+    _skipAnimation=true;
+    // 다음 프레임에서 플래그 해제 (복귀 후 새로 시작되는 애니메이션은 정상 재생)
+    requestAnimationFrame(()=>{
+      _skipAnimation=false;
+      updateDeckLayers();
+    });
+  }
+});
+
+// ===== 경로 리플레이 (클릭 시 재애니메이션) =====
+function replayRoute(gid){
+  const meta=routeMetadata[gid];
+  if(!meta||meta._replaying) return;
+  meta._replaying=true;
+
+  // 기존 데이터 제거
+  pathData=pathData.filter(d=>d.groupId!==gid);
+  dotData=dotData.filter(d=>d.groupId!==gid);
+  endpointData=endpointData.filter(d=>d.groupId!==gid);
+
+  // 다시 애니메이션
+  const {coords,color,tipText,durationMs}=meta;
+  animateRouteInternal(coords,color,durationMs,gid,tipText).then(()=>{
+    meta._replaying=false;
+  });
+}
+
+// ===== 경로 애니메이션 (deck.gl 데이터 점진적 추가) =====
+function animateRouteInternal(origCoords,colorHex,durationMs,gid,tipText){
+  const gen=_generationId; // 캡처: 이 애니메이션이 속한 세대
+  const coords=offsetCoords(origCoords);
+  const rgb=hexToRgb(colorHex);
+  const segs=buildSegments(coords);
+  const totalPts=segs.reduce((s,seg)=>s+seg.coords.length,0);
+
+  // 그룹 순서 등록
+  if(!(gid in groupOrderMap)) groupOrderMap[gid]=groupOrderCounter++;
+
+  // 메타데이터 저장/갱신
+  routeMetadata[gid]={coords:origCoords,color:colorHex,tipText,durationMs};
+
+  // 시작점 추가
+  endpointData.push({
+    position:[coords[0][1],coords[0][0]],
+    color:rgb,radius:ENDPOINT_RADIUS,
+    tipText:tipText,label:'가게',groupId:gid
+  });
+  scheduleDeckUpdate();
+
+  return new Promise(resolve=>{
+    let segIdx=0;
+    let pathIdCounter=0;
+
+    function drawNext(){
+      if(gen!==_generationId) return resolve(); // 새 CSV 로드됨 → 중단
+      if(segIdx>=segs.length){
+        // 끝점 추가
+        const ec=coords[coords.length-1];
+        endpointData.push({
+          position:[ec[1],ec[0]],
+          color:rgb,radius:ENDPOINT_RADIUS,
+          tipText:tipText,label:'배달지',groupId:gid
+        });
+        scheduleDeckUpdate();
+        resolve();
+        return;
+      }
+
+      const seg=segs[segIdx];segIdx++;
+
+      if(seg.type==='line'){
+        // 랜덤 dash 배열 생성
+        const dashes=[];
+        for(let d=0;d<15;d++){dashes.push(1+Math.random()*3);dashes.push(1+Math.random()*2);}
+        const dashArr=[dashes.reduce((a,b)=>a+b,0)*0.5, dashes.reduce((a,b)=>a+b,0)*0.15];
+
+        const pathId=gid+'_p'+(pathIdCounter++);
+        const fullPath=seg.coords.map(c=>[c[1],c[0]]);
+        let di=2; // 최소 2점으로 시작
+
+        // 경로 데이터 추가 (처음 2점)
+        const pathObj={
+          id:pathId,path:fullPath.slice(0,di),
+          color:rgb,width:PATH_WIDTH,
+          tipText:tipText,groupId:gid,
+          dashArray:dashArr
+        };
+        pathData.push(pathObj);
+
+        const segDur=Math.max(durationMs*(seg.coords.length/totalPts),50);
+        const sStart=performance.now();
+
+        function stepLine(now){
+          if(gen!==_generationId) return resolve();
+          if(_skipAnimation){
+            pathObj.path=fullPath;
+            scheduleDeckUpdate();
+            drawNext();
+            return;
+          }
+          const t=Math.min((now-sStart)/segDur,1);
+          const target=Math.min(Math.floor(t*(fullPath.length-1))+1, fullPath.length);
+          if(target>di){
+            di=target;
+            pathObj.path=fullPath.slice(0,di);
+            scheduleDeckUpdate();
+          }
+          if(t<1) requestAnimationFrame(stepLine);
+          else{
+            pathObj.path=fullPath;
+            scheduleDeckUpdate();
+            drawNext();
+          }
+        }
+        requestAnimationFrame(stepLine);
+      } else {
+        // 도트 구간
+        let di=0;
+        const segDur=Math.max(durationMs*(seg.coords.length/totalPts)*1.5,50);
+        const sStart=performance.now();
+
+        function stepDots(now){
+          if(gen!==_generationId) return resolve();
+          if(_skipAnimation){
+            while(di<seg.coords.length){
+              dotData.push({
+                position:[seg.coords[di][1],seg.coords[di][0]],
+                color:rgb,radius:DOT_RADIUS,
+                tipText:tipText,groupId:gid
+              });
+              di++;
+            }
+            scheduleDeckUpdate();
+            drawNext();
+            return;
+          }
+          const t=Math.min((now-sStart)/segDur,1);
+          const target=Math.floor(t*(seg.coords.length-1));
+          while(di<=target&&di<seg.coords.length){
+            dotData.push({
+              position:[seg.coords[di][1],seg.coords[di][0]],
+              color:rgb,radius:DOT_RADIUS,
+              tipText:tipText,groupId:gid
+            });
+            di++;
+          }
+          scheduleDeckUpdate();
+          if(t<1) requestAnimationFrame(stepDots);
+          else{
+            while(di<seg.coords.length){
+              dotData.push({
+                position:[seg.coords[di][1],seg.coords[di][0]],
+                color:rgb,radius:DOT_RADIUS,
+                tipText:tipText,groupId:gid
+              });
+              di++;
+            }
+            scheduleDeckUpdate();
+            drawNext();
+          }
+        }
+        requestAnimationFrame(stepDots);
+      }
+    }
+    drawNext();
+  });
+}
+
+// ===== CSV 파일 처리 =====
+document.getElementById('file').addEventListener('change',async(e)=>{
+  const file=e.target.files[0];if(!file)return;
+
+  // 렌더링 시작 → 테마 패널 비활성화
+  _rendering=true;
+  document.getElementById('theme-panel').classList.add('disabled');
+
+  // 기존 데이터 초기화
+  _generationId++; // 이전 애니메이션 + fetch 모두 중단
+  pathData=[];dotData=[];endpointData=[];
+  hoveredGroupId=null;clickedGroupId=null;
+  routeMetadata={};
+  groupOrderCounter=0;groupOrderMap={};
+  updateDeckLayers();
+
+  const text=await file.text();
+  let rows=parseCSV(text).filter(r=>r.shop_lat&&r.dlvry_lat);
+  rows.forEach(r=>{r._pickup=parseTS(r.pick_up_date);r._handover=parseTS(r.hand_over_date);});
+  const total=rows.length;
+  // 셔플
+  for(let i=rows.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[rows[i],rows[j]]=[rows[j],rows[i]];}
+  let done=0,fitted=false;
+  statusEl.textContent=total+'건 처리 중...';
+
+  async function fetchAndDraw(r,i){
+    if(gen!==_generationId) return; // 새 CSV 로드됨 → 무시
+    const slat=parseFloat(r.shop_lat),slon=parseFloat(r.shop_lon);
+    const dlat=parseFloat(r.dlvry_lat),dlon=parseFloat(r.dlvry_lon);
+    const rt=await getRoute(slat,slon,dlat,dlon);
+    if(!rt){done++;countEl.textContent=done+'/'+total+'건';if(done===total){statusEl.textContent='완료 '+total+'건!';_rendering=false;document.getElementById('theme-panel').classList.remove('disabled');}return;}
+    rt.coords[0]=[slat,slon];rt.coords[rt.coords.length-1]=[dlat,dlon];
+    if(!fitted){map.fitBounds(rt.coords.map(c=>[c[0],c[1]]),{padding:[120,120],maxZoom:13});fitted=true;}
+    let animDur=2000,durText='';
+    if(r._pickup&&r._handover){const dur=r._handover-r._pickup;animDur=Math.max(dur*SCALE,300);durText=fmtDur(dur);}
+    const color=getThemeColor(i,total);
+    const gid='g'+i;
+    const tip='#'+(i+1)+' '+Math.round(rt.dist)+'m'+(durText?' / '+durText:'');
+    animateRouteInternal(rt.coords,color,animDur,gid,tip);
+    done++;countEl.textContent=done+'/'+total+'건';
+    if(done===total){statusEl.textContent='완료 '+total+'건!';_rendering=false;document.getElementById('theme-panel').classList.remove('disabled');}
+  }
+
+  const gen=_generationId;
+  const queue=[...rows.entries()];
+  await Promise.all(Array(Math.min(2,total)).fill(null).map(async()=>{
+    while(queue.length){
+      if(gen!==_generationId) return; // 새 CSV 로드됨 → fetch 중단
+      const[i,r]=queue.shift();await fetchAndDraw(r,i);
+    }
+  }));
+});
+
+// ===== 쿼리 빌더 =====
+const RGN_DATA=[
+["11","서울특별시","11110","종로구"],["11","서울특별시","11140","중구"],["11","서울특별시","11170","용산구"],["11","서울특별시","11200","성동구"],["11","서울특별시","11215","광진구"],["11","서울특별시","11230","동대문구"],["11","서울특별시","11260","중랑구"],["11","서울특별시","11290","성북구"],["11","서울특별시","11305","강북구"],["11","서울특별시","11320","도봉구"],["11","서울특별시","11350","노원구"],["11","서울특별시","11380","은평구"],["11","서울특별시","11410","서대문구"],["11","서울특별시","11440","마포구"],["11","서울특별시","11470","양천구"],["11","서울특별시","11500","강서구"],["11","서울특별시","11530","구로구"],["11","서울특별시","11545","금천구"],["11","서울특별시","11560","영등포구"],["11","서울특별시","11590","동작구"],["11","서울특별시","11620","관악구"],["11","서울특별시","11650","서초구"],["11","서울특별시","11680","강남구"],["11","서울특별시","11710","송파구"],["11","서울특별시","11740","강동구"],
+["26","부산광역시","26110","중구"],["26","부산광역시","26140","서구"],["26","부산광역시","26170","동구"],["26","부산광역시","26200","영도구"],["26","부산광역시","26230","부산진구"],["26","부산광역시","26260","동래구"],["26","부산광역시","26290","남구"],["26","부산광역시","26320","북구"],["26","부산광역시","26350","해운대구"],["26","부산광역시","26380","사하구"],["26","부산광역시","26410","금정구"],["26","부산광역시","26440","강서구"],["26","부산광역시","26470","연제구"],["26","부산광역시","26500","수영구"],["26","부산광역시","26530","사상구"],["26","부산광역시","26710","기장군"],
+["27","대구광역시","27110","중구"],["27","대구광역시","27140","동구"],["27","대구광역시","27170","서구"],["27","대구광역시","27200","남구"],["27","대구광역시","27230","북구"],["27","대구광역시","27260","수성구"],["27","대구광역시","27290","달서구"],["27","대구광역시","27710","달성군"],
+["28","인천광역시","28110","중구"],["28","인천광역시","28140","동구"],["28","인천광역시","28177","미추홀구"],["28","인천광역시","28185","연수구"],["28","인천광역시","28200","남동구"],["28","인천광역시","28237","부평구"],["28","인천광역시","28245","계양구"],["28","인천광역시","28260","서구"],["28","인천광역시","28710","강화군"],["28","인천광역시","28720","옹진군"],
+["29","광주광역시","29110","동구"],["29","광주광역시","29140","서구"],["29","광주광역시","29155","남구"],["29","광주광역시","29170","북구"],["29","광주광역시","29200","광산구"],
+["30","대전광역시","30110","동구"],["30","대전광역시","30140","중구"],["30","대전광역시","30170","서구"],["30","대전광역시","30200","유성구"],["30","대전광역시","30230","대덕구"],
+["31","울산광역시","31110","중구"],["31","울산광역시","31140","남구"],["31","울산광역시","31170","동구"],["31","울산광역시","31200","북구"],["31","울산광역시","31710","울주군"],
+["36","세종특별자치시","36110","세종특별자치시"],
+["41","경기도","41111","수원시 장안구"],["41","경기도","41113","수원시 권선구"],["41","경기도","41115","수원시 팔달구"],["41","경기도","41117","수원시 영통구"],["41","경기도","41131","성남시 수정구"],["41","경기도","41133","성남시 중원구"],["41","경기도","41135","성남시 분당구"],["41","경기도","41150","의정부시"],["41","경기도","41171","안양시 만안구"],["41","경기도","41173","안양시 동안구"],["41","경기도","41190","부천시"],["41","경기도","41210","광명시"],["41","경기도","41220","평택시"],["41","경기도","41250","동두천시"],["41","경기도","41271","안산시 상록구"],["41","경기도","41273","안산시 단원구"],["41","경기도","41281","고양시 덕양구"],["41","경기도","41285","고양시 일산동구"],["41","경기도","41287","고양시 일산서구"],["41","경기도","41290","과천시"],["41","경기도","41310","구리시"],["41","경기도","41360","남양주시"],["41","경기도","41370","오산시"],["41","경기도","41390","시흥시"],["41","경기도","41410","군포시"],["41","경기도","41430","의왕시"],["41","경기도","41450","하남시"],["41","경기도","41461","용인시 처인구"],["41","경기도","41463","용인시 기흥구"],["41","경기도","41465","용인시 수지구"],["41","경기도","41480","파주시"],["41","경기도","41500","이천시"],["41","경기도","41550","안성시"],["41","경기도","41570","김포시"],["41","경기도","41590","화성시"],["41","경기도","41610","광주시"],["41","경기도","41630","양주시"],["41","경기도","41650","포천시"],["41","경기도","41670","여주시"],["41","경기도","41800","연천군"],["41","경기도","41820","가평군"],["41","경기도","41830","양평군"],
+["42","강원도","42110","춘천시"],["42","강원도","42130","원주시"],["42","강원도","42150","강릉시"],["42","강원도","42170","동해시"],["42","강원도","42190","태백시"],["42","강원도","42210","속초시"],["42","강원도","42230","삼척시"],["42","강원도","42720","홍천군"],["42","강원도","42730","횡성군"],["42","강원도","42750","영월군"],["42","강원도","42760","평창군"],["42","강원도","42770","정선군"],["42","강원도","42780","철원군"],["42","강원도","42790","화천군"],["42","강원도","42800","양구군"],["42","강원도","42810","인제군"],["42","강원도","42820","고성군"],["42","강원도","42830","양양군"],
+["43","충청북도","43111","청주시 상당구"],["43","충청북도","43112","청주시 서원구"],["43","충청북도","43113","청주시 흥덕구"],["43","충청북도","43114","청주시 청원구"],["43","충청북도","43130","충주시"],["43","충청북도","43150","제천시"],["43","충청북도","43720","보은군"],["43","충청북도","43730","옥천군"],["43","충청북도","43740","영동군"],["43","충청북도","43745","증평군"],["43","충청북도","43750","진천군"],["43","충청북도","43760","괴산군"],["43","충청북도","43770","음성군"],["43","충청북도","43800","단양군"],
+["44","충청남도","44131","천안시 동남구"],["44","충청남도","44133","천안시 서북구"],["44","충청남도","44150","공주시"],["44","충청남도","44180","보령시"],["44","충청남도","44200","아산시"],["44","충청남도","44210","서산시"],["44","충청남도","44230","논산시"],["44","충청남도","44250","계룡시"],["44","충청남도","44270","당진시"],["44","충청남도","44710","금산군"],["44","충청남도","44760","부여군"],["44","충청남도","44770","서천군"],["44","충청남도","44790","청양군"],["44","충청남도","44800","홍성군"],["44","충청남도","44810","예산군"],["44","충청남도","44825","태안군"],
+["45","전라북도","45111","전주시 완산구"],["45","전라북도","45113","전주시 덕진구"],["45","전라북도","45130","군산시"],["45","전라북도","45140","익산시"],["45","전라북도","45180","정읍시"],["45","전라북도","45190","남원시"],["45","전라북도","45210","김제시"],["45","전라북도","45710","완주군"],["45","전라북도","45720","진안군"],["45","전라북도","45730","무주군"],["45","전라북도","45740","장수군"],["45","전라북도","45750","임실군"],["45","전라북도","45770","순창군"],["45","전라북도","45790","고창군"],["45","전라북도","45800","부안군"],
+["46","전라남도","46110","목포시"],["46","전라남도","46130","여수시"],["46","전라남도","46150","순천시"],["46","전라남도","46170","나주시"],["46","전라남도","46230","광양시"],["46","전라남도","46710","담양군"],["46","전라남도","46720","곡성군"],["46","전라남도","46730","구례군"],["46","전라남도","46770","고흥군"],["46","전라남도","46780","보성군"],["46","전라남도","46790","화순군"],["46","전라남도","46800","장흥군"],["46","전라남도","46810","강진군"],["46","전라남도","46820","해남군"],["46","전라남도","46830","영암군"],["46","전라남도","46840","무안군"],["46","전라남도","46860","함평군"],["46","전라남도","46870","영광군"],["46","전라남도","46880","장성군"],["46","전라남도","46890","완도군"],["46","전라남도","46900","진도군"],["46","전라남도","46910","신안군"],
+["47","경상북도","47111","포항시 남구"],["47","경상북도","47113","포항시 북구"],["47","경상북도","47130","경주시"],["47","경상북도","47150","김천시"],["47","경상북도","47170","안동시"],["47","경상북도","47190","구미시"],["47","경상북도","47210","영주시"],["47","경상북도","47230","영천시"],["47","경상북도","47250","상주시"],["47","경상북도","47280","문경시"],["47","경상북도","47290","경산시"],["47","경상북도","47720","군위군"],["47","경상북도","47730","의성군"],["47","경상북도","47750","청송군"],["47","경상북도","47760","영양군"],["47","경상북도","47770","영덕군"],["47","경상북도","47820","청도군"],["47","경상북도","47830","고령군"],["47","경상북도","47840","성주군"],["47","경상북도","47850","칠곡군"],["47","경상북도","47900","예천군"],["47","경상북도","47920","봉화군"],["47","경상북도","47930","울진군"],["47","경상북도","47940","울릉군"],
+["48","경상남도","48121","창원시 의창구"],["48","경상남도","48123","창원시 성산구"],["48","경상남도","48125","창원시 마산합포구"],["48","경상남도","48127","창원시 마산회원구"],["48","경상남도","48129","창원시 진해구"],["48","경상남도","48170","진주시"],["48","경상남도","48220","통영시"],["48","경상남도","48240","사천시"],["48","경상남도","48250","김해시"],["48","경상남도","48270","밀양시"],["48","경상남도","48310","거제시"],["48","경상남도","48330","양산시"],["48","경상남도","48720","의령군"],["48","경상남도","48730","함안군"],["48","경상남도","48740","창녕군"],["48","경상남도","48820","고성군"],["48","경상남도","48840","남해군"],["48","경상남도","48850","하동군"],["48","경상남도","48860","산청군"],["48","경상남도","48870","함양군"],["48","경상남도","48880","거창군"],["48","경상남도","48890","합천군"],
+["50","제주특별자치도","50110","제주시"],["50","제주특별자치도","50130","서귀포시"]
+];
+
+// 광역시/도 드롭다운 초기화
+(function(){
+  const sel=document.getElementById('q-rgn1');
+  const seen=new Set();
+  RGN_DATA.forEach(r=>{
+    if(!seen.has(r[0])){seen.add(r[0]);const o=document.createElement('option');o.value=r[0];o.textContent=r[1];sel.appendChild(o);}
+  });
+  // 시간대 드롭다운 초기화 (0~23시)
+  ['q-hour-from','q-hour-to'].forEach(id=>{
+    const s=document.getElementById(id);
+    for(let h=0;h<24;h++){
+      const o=document.createElement('option');
+      o.value=h;
+      o.textContent=String(h).padStart(2,'0')+':00';
+      s.appendChild(o);
+    }
+  });
+})();
+
+function updateRgn2(){
+  const rgn1=document.getElementById('q-rgn1').value;
+  const sel=document.getElementById('q-rgn2');
+  sel.innerHTML='<option value="">전체</option>';
+  if(!rgn1)return;
+  RGN_DATA.filter(r=>r[0]===rgn1).forEach(r=>{
+    const o=document.createElement('option');o.value=r[2];o.textContent=r[3]+' ('+r[2]+')';sel.appendChild(o);
+  });
+}
+
+document.getElementById('q-limit').addEventListener('change',function(){
+  if(parseInt(this.value)>100000) this.value=100000;
+  if(parseInt(this.value)<1) this.value=1;
+});
+function generateQuery(){
+  const rgn1=document.getElementById('q-rgn1').value;
+  const rgn2=document.getElementById('q-rgn2').value;
+  const dateFrom=document.getElementById('q-date-from').value;
+  const dateTo=document.getElementById('q-date-to').value;
+  const limit=document.getElementById('q-limit').value;
+  const hourFrom=document.getElementById('q-hour-from').value;
+  const hourTo=document.getElementById('q-hour-to').value;
+  let where=[];
+  if(dateFrom&&dateTo&&dateFrom===dateTo) where.push("part_date = '"+dateFrom+"'");
+  else{
+    if(dateFrom) where.push("part_date >= '"+dateFrom+"'");
+    if(dateTo) where.push("part_date <= '"+dateTo+"'");
+  }
+  if(rgn2) where.push("dlvry_rgn2_cd = '"+rgn2+"'");
+  else if(rgn1) where.push("dlvry_rgn1_cd = '"+rgn1+"'");
+  if(hourFrom!==''&&hourTo!==''){
+    const hf=parseInt(hourFrom),ht=parseInt(hourTo);
+    if(hf<=ht) where.push("HOUR(pick_up_date) BETWEEN "+hf+" AND "+ht);
+    else where.push("(HOUR(pick_up_date) >= "+hf+" OR HOUR(pick_up_date) <= "+ht+")");
+  } else if(hourFrom!==''){
+    where.push("HOUR(pick_up_date) >= "+parseInt(hourFrom));
+  } else if(hourTo!==''){
+    where.push("HOUR(pick_up_date) <= "+parseInt(hourTo));
+  }
+  where.push('pick_up_date IS NOT NULL');
+  where.push('hand_over_date IS NOT NULL');
+  const q='SELECT ord_no, shop_lat, shop_lon, dlvry_lat, dlvry_lon, pick_up_date, hand_over_date\nFROM sbbi.bm_delivery_time_period\nWHERE '+where.join('\n  AND ')+'\nLIMIT '+limit;
+  document.getElementById('q-result').value=q;
+}
+function copyQuery(){
+  const ta=document.getElementById('q-result');
+  if(!ta.value) generateQuery();
+  navigator.clipboard.writeText(ta.value).then(()=>{
+    const btn=document.querySelector('.btn-copy');
+    btn.textContent='복사됨!';setTimeout(()=>btn.textContent='복사',1500);
+  });
+}
+document.getElementById('modal-bg').addEventListener('click',function(e){
+  if(e.target===this) this.classList.remove('show');
+});
+
+// ===== 테마 패널 =====
+// 패널 아래에 위치 동기화
+function positionThemePanel(){
+  const panel=document.getElementById('panel');
+  const tp=document.getElementById('theme-panel');
+  const rect=panel.getBoundingClientRect();
+  tp.style.top=(rect.bottom+8)+'px';
+}
+positionThemePanel();
+window.addEventListener('resize',positionThemePanel);
+// panel 크기 변화 감지 (MutationObserver 대신 간단하게)
+setInterval(positionThemePanel,500);
+
+// 지도 테마 변경
+document.getElementById('t-map').addEventListener('change',function(){
+  if(_rendering) return;
+  map.removeLayer(currentTileLayer);
+  currentTileLayer=L.tileLayer(MAP_TILES[this.value],{maxZoom:19}).addTo(map);
+});
+</script>
+</body></html>

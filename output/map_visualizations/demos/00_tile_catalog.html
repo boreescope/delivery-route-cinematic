@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Leaflet 타일 카탈로그</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    background: #0a0a0a;
+    color: #eaeaea;
+    padding: 40px;
+  }
+  h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+  .sub { color: #888; margin-bottom: 32px; font-size: 14px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .card {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .mapbox { width: 100%; height: 260px; background: #000; }
+  .meta { padding: 14px 16px; }
+  .title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .desc { font-size: 12px; color: #999; line-height: 1.5; }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    color: #6af;
+    border: 1px solid #335;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+<h1>Leaflet 타일 카탈로그 — 서울</h1>
+<div class="sub">무료로 쓸 수 있는 주요 basemap 12종. 데이터 시각화 용도별로 고를 때 참고.</div>
+
+<div class="grid">
+  <div class="card">
+    <div id="m1" class="mapbox"></div>
+    <div class="meta"><div class="title">01. OpenStreetMap</div><div class="desc">표준 기본 베이스맵</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m2" class="mapbox"></div>
+    <div class="meta"><div class="title">02. CartoDB Positron</div><div class="desc">회색조 미니멀, 데이터 레이어 최적</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m3" class="mapbox"></div>
+    <div class="meta"><div class="title">03. CartoDB Dark Matter</div><div class="desc">검은 배경, 네온 궤적·히트맵</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m4" class="mapbox"></div>
+    <div class="meta"><div class="title">04. CartoDB Voyager</div><div class="desc">컬러풀 밸런스드 스타일</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m5" class="mapbox"></div>
+    <div class="meta"><div class="title">05. Esri WorldStreetMap</div><div class="desc">도로 상세 지도</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m6" class="mapbox"></div>
+    <div class="meta"><div class="title">06. Esri WorldTerrain</div><div class="desc">지형 음영 + 경계</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m7" class="mapbox"></div>
+    <div class="meta"><div class="title">07. Esri WorldPhysical</div><div class="desc">물리 지리 수채 톤</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m8" class="mapbox"></div>
+    <div class="meta"><div class="title">08. Esri WorldImagery</div><div class="desc">위성 영상</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m9" class="mapbox"></div>
+    <div class="meta"><div class="title">09. Esri WorldTopoMap</div><div class="desc">지형도</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m10" class="mapbox"></div>
+    <div class="meta"><div class="title">10. OpenTopoMap</div><div class="desc">등고선 강조</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m11" class="mapbox"></div>
+    <div class="meta"><div class="title">11. Esri WorldGrayCanvas</div><div class="desc">연회색 캔버스</div><div class="badge">무료</div></div>
+  </div>
+  <div class="card">
+    <div id="m12" class="mapbox"></div>
+    <div class="meta"><div class="title">12. CyclOSM</div><div class="desc">자전거·보행 친화</div><div class="badge">무료</div></div>
+  </div>
+</div>
+
+<script>
+const SEOUL = [37.5665, 126.9780];
+const Z = 11;
+const opts = { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false };
+
+const tiles = [
+  ['m1',  'https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+  ['m2',  'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'],
+  ['m3',  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'],
+  ['m4',  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'],
+  ['m5',  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'],
+  ['m6',  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}'],
+  ['m7',  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}'],
+  ['m8',  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+  ['m9',  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'],
+  ['m10', 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png'],
+  ['m11', 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'],
+  ['m12', 'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png'],
+];
+
+tiles.forEach(([id, url]) => {
+  const m = L.map(id, opts).setView(SEOUL, Z);
+  L.tileLayer(url, { maxZoom: 19 }).addTo(m);
+});
+</script>
+</body>
+</html>

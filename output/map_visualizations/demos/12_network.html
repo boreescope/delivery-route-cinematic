@@ -1,0 +1,46 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>12 Network</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0a0a;overflow:hidden;font-family:-apple-system,sans-serif}
+#map{position:absolute;inset:0;background:#0a0a0a}
+#label{position:absolute;left:24px;bottom:20px;z-index:1000;color:#fff;font-size:13px;background:rgba(0,0,0,.55);padding:10px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(6px)}
+#label b{font-size:16px;display:block;margin-bottom:3px;font-weight:700}
+#label span{color:#bbb}
+</style></head><body>
+<div id="map"></div>
+<div id="label"><b>12. Network — 매장·고객 이분 그래프</b><span>노드 크기=주문 수. 엣지=실제 배달.</span></div>
+<script src="_common.js"></script>
+<script>
+const map = initMap('map');
+loadDeliveries().then(data => {
+  const shops = new Map(), custs = new Map();
+  data.forEach(d => {
+    const ks = d.s.map(v=>v.toFixed(3)).join(',');
+    const kc = d.d.map(v=>v.toFixed(3)).join(',');
+    if (!shops.has(ks)) shops.set(ks, {pos:d.s, cnt:0});
+    if (!custs.has(kc)) custs.set(kc, {pos:d.d, cnt:0});
+    shops.get(ks).cnt++;
+    custs.get(kc).cnt++;
+  });
+  // 엣지
+  data.forEach(d => {
+    L.polyline([ll(d.s), ll(d.d)], {color:'#00e5ff', weight:0.4, opacity:0.2}).addTo(map);
+  });
+  // 고객
+  for (const c of custs.values()){
+    L.circleMarker(ll(c.pos), {
+      radius: 2 + Math.sqrt(c.cnt)*0.8,
+      color:'#ffd93d', fillColor:'#ffd93d', fillOpacity:0.8, weight:0
+    }).addTo(map);
+  }
+  // 매장 (위에 올림)
+  for (const s of shops.values()){
+    L.circleMarker(ll(s.pos), {
+      radius: 3 + Math.sqrt(s.cnt)*1.5,
+      color:'#fff', fillColor:'#ff2d7a', fillOpacity:0.95, weight:0.8
+    }).addTo(map);
+  }
+});
+</script></body></html>

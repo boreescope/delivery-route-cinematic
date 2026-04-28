@@ -1,0 +1,40 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>14 Dead Zone</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0a0a;overflow:hidden;font-family:-apple-system,sans-serif}
+#map{position:absolute;inset:0;background:#0a0a0a}
+#label{position:absolute;left:24px;bottom:20px;z-index:1000;color:#fff;font-size:13px;background:rgba(0,0,0,.55);padding:10px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(6px)}
+#label b{font-size:16px;display:block;margin-bottom:3px;font-weight:700}
+#label span{color:#bbb}
+</style></head><body>
+<div id="map"></div>
+<div id="label"><b>14. Dead Zone — 소외 지역 네거티브</b><span>서울 H3 res7 중 실제 배달 0건 셀만 붉게 강조.</span></div>
+<script src="_common.js"></script>
+<script>
+const map = initMap('map');
+loadDeliveries().then(data => {
+  const RES = 7;
+  const all = new Set();
+  for (let lat=SEOUL_BBOX.minLat; lat<=SEOUL_BBOX.maxLat; lat+=0.008){
+    for (let lng=SEOUL_BBOX.minLng; lng<=SEOUL_BBOX.maxLng; lng+=0.010){
+      all.add(h3.latLngToCell(lat, lng, RES));
+    }
+  }
+  const active = new Set();
+  data.forEach(d => {
+    active.add(h3.latLngToCell(d.d[1], d.d[0], RES));
+    active.add(h3.latLngToCell(d.s[1], d.s[0], RES));
+  });
+  for (const hex of all) {
+    if (active.has(hex)) continue;
+    const boundary = h3.cellToBoundary(hex);
+    L.polygon(boundary, {
+      color:'#ff6488', weight:0.6,
+      fillColor:'#ff2d7a', fillOpacity:0.7
+    }).addTo(map);
+  }
+});
+</script></body></html>
