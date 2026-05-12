@@ -22,7 +22,15 @@ import Playbar from './Playbar'
 const INITIAL_VIEW = {
   center: [126.978, 37.5665] as [number, number],
   zoom: 11,
+  pitch: 0,
+  bearing: 0,
 }
+
+const VIEW_PRESETS = [
+  { label: '🗺️', title: '탑뷰', pitch: 0, bearing: 0 },
+  { label: '📐', title: '틸트', pitch: 45, bearing: -20 },
+  { label: '🦅', title: '버드아이', pitch: 60, bearing: -45 },
+] as const
 
 interface TooltipInfo {
   x: number
@@ -219,6 +227,11 @@ export default function Map() {
       style: MAP_THEME_URLS[theme],
       center: INITIAL_VIEW.center,
       zoom: INITIAL_VIEW.zoom,
+      pitch: INITIAL_VIEW.pitch,
+      bearing: INITIAL_VIEW.bearing,
+      pitchWithRotate: true,
+      dragRotate: true,
+      touchPitch: true,
     })
 
     const overlay = new MapboxOverlay({
@@ -283,8 +296,17 @@ export default function Map() {
 
   const showPlaybar = layers.route && routeEngineRef.current?.hasData()
 
+  const flyToPreset = useCallback((pitch: number, bearing: number) => {
+    if (!mapRef.current) return
+    mapRef.current.flyTo({
+      pitch,
+      bearing,
+      duration: 1200,
+    })
+  }, [])
+
   return (
-    <div ref={containerRef} style={{ width: '100vw', height: '100vh' }}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       {tooltip && (
         <div
           style={{
@@ -306,6 +328,31 @@ export default function Map() {
           {tooltip.text}
         </div>
       )}
+
+      {/* View Preset Buttons */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: showPlaybar ? 72 : 16,
+          right: 16,
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}
+      >
+        {VIEW_PRESETS.map((preset) => (
+          <button
+            key={preset.title}
+            onClick={() => flyToPreset(preset.pitch, preset.bearing)}
+            className="flex items-center justify-center w-9 h-9 rounded-lg bg-card/90 border border-border backdrop-blur-sm text-foreground hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+            title={preset.title}
+          >
+            <span className="text-base">{preset.label}</span>
+          </button>
+        ))}
+      </div>
+
       <Playbar visible={!!showPlaybar} />
     </div>
   )

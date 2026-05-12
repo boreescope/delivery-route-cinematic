@@ -1,4 +1,12 @@
 import { useState, useMemo } from 'react'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 // 지역 코드 데이터: [광역시도코드, 광역시도명, 시군구코드, 시군구명]
 const RGN_DATA: [string, string, string, string][] = [
@@ -21,7 +29,7 @@ const RGN_DATA: [string, string, string, string][] = [
   ["50","제주특별자치도","50110","제주시"],["50","제주특별자치도","50130","서귀포시"],
 ]
 
-export default function QueryBuilder({ onClose }: { onClose: () => void }) {
+export default function QueryBuilder({ onClose: _onClose }: { onClose: () => void }) {
   const [rgn1, setRgn1] = useState('')
   const [rgn2, setRgn2] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -93,183 +101,122 @@ export default function QueryBuilder({ onClose }: { onClose: () => void }) {
     })
   }
 
-  const selectStyle: React.CSSProperties = {
-    width: '100%',
-    background: 'rgba(255,255,255,0.08)',
-    border: '1px solid rgba(255,255,255,0.15)',
-    borderRadius: 4,
-    color: '#eee',
-    fontSize: 12,
-    padding: '5px 8px',
-    outline: 'none',
-  }
-
-  const inputStyle: React.CSSProperties = {
-    ...selectStyle,
-    width: '48%',
-  }
-
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0,0,0,0.6)',
-        backdropFilter: 'blur(4px)',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div
-        style={{
-          background: '#1e1e1e',
-          border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: 12,
-          padding: '20px 24px',
-          width: 420,
-          maxHeight: '80vh',
-          overflow: 'auto',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ color: '#fff', margin: 0, fontSize: 15 }}>🔍 쿼리 빌더</h3>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#888', fontSize: 18, cursor: 'pointer' }}
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* 광역시/도 */}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ color: '#aaa', fontSize: 11 }}>광역시/도</label>
-          <select
-            value={rgn1}
-            onChange={(e) => { setRgn1(e.target.value); setRgn2('') }}
-            style={selectStyle}
-          >
-            <option value="">전체</option>
+    <div className="space-y-3">
+      {/* 광역시/도 */}
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">광역시/도</label>
+        <Select value={rgn1 || '_all'} onValueChange={(v) => { setRgn1(v === '_all' ? '' : v); setRgn2('') }}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="전체" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all" className="text-xs">전체</SelectItem>
             {rgn1List.map(([code, name]) => (
-              <option key={code} value={code}>{name}</option>
+              <SelectItem key={code} value={code} className="text-xs">{name}</SelectItem>
             ))}
-          </select>
-        </div>
+          </SelectContent>
+        </Select>
+      </div>
 
-        {/* 시군구 */}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ color: '#aaa', fontSize: 11 }}>시군구</label>
-          <select
-            value={rgn2}
-            onChange={(e) => setRgn2(e.target.value)}
-            style={selectStyle}
-            disabled={!rgn1}
-          >
-            <option value="">전체</option>
+      {/* 시군구 */}
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">시군구</label>
+        <Select value={rgn2 || '_all'} onValueChange={(v) => setRgn2(v === '_all' ? '' : v)} disabled={!rgn1}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="전체" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all" className="text-xs">전체</SelectItem>
             {rgn2List.map(({ code, name }) => (
-              <option key={code} value={code}>{name} ({code})</option>
+              <SelectItem key={code} value={code} className="text-xs">{name} ({code})</SelectItem>
             ))}
-          </select>
-        </div>
+          </SelectContent>
+        </Select>
+      </div>
 
-        {/* 날짜 */}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ color: '#aaa', fontSize: 11 }}>기간</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={inputStyle} />
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={inputStyle} />
-          </div>
-        </div>
-
-        {/* 시간대 */}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ color: '#aaa', fontSize: 11 }}>시간대</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <select value={hourFrom} onChange={(e) => setHourFrom(e.target.value)} style={inputStyle}>
-              <option value="">시작</option>
-              {Array.from({ length: 24 }, (_, i) => (
-                <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-              ))}
-            </select>
-            <select value={hourTo} onChange={(e) => setHourTo(e.target.value)} style={inputStyle}>
-              <option value="">종료</option>
-              {Array.from({ length: 24 }, (_, i) => (
-                <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* LIMIT */}
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ color: '#aaa', fontSize: 11 }}>LIMIT</label>
+      {/* 날짜 */}
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">기간</label>
+        <div className="flex gap-2">
           <input
-            type="number"
-            min={1}
-            max={100000}
-            value={limit}
-            onChange={(e) => setLimit(e.target.value)}
-            style={selectStyle}
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="flex-1 h-8 bg-input/50 border border-border rounded-md text-xs text-foreground px-2 outline-none focus:ring-1 focus:ring-ring"
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="flex-1 h-8 bg-input/50 border border-border rounded-md text-xs text-foreground px-2 outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
+      </div>
 
-        {/* Buttons */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <button
-            onClick={generateQuery}
-            style={{
-              flex: 1,
-              background: 'rgba(66,133,244,0.3)',
-              border: '1px solid rgba(66,133,244,0.5)',
-              borderRadius: 6,
-              color: '#8ab4f8',
-              fontSize: 12,
-              padding: '7px 12px',
-              cursor: 'pointer',
-            }}
-          >
-            생성
-          </button>
-          <button
-            onClick={copyQuery}
-            style={{
-              flex: 1,
-              background: 'rgba(76,175,80,0.2)',
-              border: '1px solid rgba(76,175,80,0.4)',
-              borderRadius: 6,
-              color: '#81c784',
-              fontSize: 12,
-              padding: '7px 12px',
-              cursor: 'pointer',
-            }}
-          >
-            {copied ? '복사됨!' : '복사'}
-          </button>
+      {/* 시간대 */}
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">시간대</label>
+        <div className="flex gap-2">
+          <Select value={hourFrom || '_none'} onValueChange={(v) => setHourFrom(v === '_none' ? '' : v)}>
+            <SelectTrigger className="h-8 text-xs flex-1">
+              <SelectValue placeholder="시작" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none" className="text-xs">시작</SelectItem>
+              {Array.from({ length: 24 }, (_, i) => (
+                <SelectItem key={i} value={String(i)} className="text-xs">
+                  {String(i).padStart(2, '0')}:00
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={hourTo || '_none'} onValueChange={(v) => setHourTo(v === '_none' ? '' : v)}>
+            <SelectTrigger className="h-8 text-xs flex-1">
+              <SelectValue placeholder="종료" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none" className="text-xs">종료</SelectItem>
+              {Array.from({ length: 24 }, (_, i) => (
+                <SelectItem key={i} value={String(i)} className="text-xs">
+                  {String(i).padStart(2, '0')}:00
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+      </div>
 
-        {/* Result */}
-        <textarea
-          value={query}
-          readOnly
-          placeholder="쿼리가 여기에 표시됩니다..."
-          style={{
-            width: '100%',
-            height: 120,
-            background: 'rgba(0,0,0,0.4)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 6,
-            color: '#a5d6a7',
-            fontSize: 11,
-            fontFamily: 'monospace',
-            padding: 10,
-            resize: 'vertical',
-            outline: 'none',
-          }}
+      {/* LIMIT */}
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">LIMIT</label>
+        <input
+          type="number"
+          min={1}
+          max={100000}
+          value={limit}
+          onChange={(e) => setLimit(e.target.value)}
+          className="w-full h-8 bg-input/50 border border-border rounded-md text-xs text-foreground px-2 outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
+
+      {/* Buttons */}
+      <div className="flex gap-2">
+        <Button variant="default" size="sm" className="flex-1 text-xs" onClick={generateQuery}>
+          생성
+        </Button>
+        <Button variant="secondary" size="sm" className="flex-1 text-xs" onClick={copyQuery}>
+          {copied ? '복사됨!' : '복사'}
+        </Button>
+      </div>
+
+      {/* Result */}
+      <textarea
+        value={query}
+        readOnly
+        placeholder="쿼리가 여기에 표시됩니다..."
+        className="w-full h-28 bg-background border border-border rounded-md text-[11px] text-primary font-mono p-2 resize-y outline-none"
+      />
     </div>
   )
 }

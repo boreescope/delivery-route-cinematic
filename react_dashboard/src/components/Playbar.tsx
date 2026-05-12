@@ -1,8 +1,9 @@
 /**
  * 플레이바 컨트롤 — 재생/역재생/속도 조절/시크바 (하단 고정)
- * delivery_viewer.html의 playbar 포팅
  */
 import { useState, useCallback } from 'react'
+import { Button } from '@/components/ui/button'
+import { Slider } from '@/components/ui/slider'
 
 interface PlaybarProps {
   visible: boolean
@@ -14,7 +15,7 @@ const SPEEDS = [0.5, 1, 2, 4]
 export default function Playbar({ visible, onSpeedChange }: PlaybarProps) {
   const [playing, setPlaying] = useState(false)
   const [reversed, setReversed] = useState(false)
-  const [speedIdx, setSpeedIdx] = useState(1) // default 1x
+  const [speedIdx, setSpeedIdx] = useState(1)
   const [seekValue, setSeekValue] = useState(0)
 
   const handlePlay = useCallback(() => {
@@ -52,84 +53,60 @@ export default function Playbar({ visible, onSpeedChange }: PlaybarProps) {
   if (!visible) return null
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 1000,
-        background: '#fff',
-        padding: '10px 20px',
-        boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
-        fontSize: 13,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-      }}
-    >
-      <button
+    <div className="fixed bottom-0 left-0 right-0 z-[1000] bg-card/95 backdrop-blur-md border-t border-border px-5 py-2.5 flex items-center gap-3">
+      <Button
+        variant={reversed ? 'default' : 'outline'}
+        size="sm"
+        className="h-7 w-7 p-0 text-xs"
         onClick={handleReverse}
-        style={btnStyle(reversed)}
         title="역재생"
       >
         ◀◀
-      </button>
-      <button
+      </Button>
+      <Button
+        variant={playing && !reversed ? 'default' : 'outline'}
+        size="sm"
+        className="h-7 w-7 p-0 text-xs"
         onClick={handlePlay}
-        style={btnStyle(playing && !reversed)}
         title="재생/정지"
       >
         {playing && !reversed ? '⏸' : '▶'}
-      </button>
-      <button onClick={handleReset} style={btnStyle(false)} title="처음으로">
-        ⏮
-      </button>
-      <span
-        style={{
-          minWidth: 80,
-          textAlign: 'center',
-          fontWeight: 600,
-          color: '#333',
-          fontSize: 12,
-        }}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 w-7 p-0 text-xs"
+        onClick={handleReset}
+        title="처음으로"
       >
+        ⏮
+      </Button>
+
+      <span className="min-w-[60px] text-center text-xs font-medium text-foreground">
         {formatTime(seekValue)}
       </span>
-      <input
-        type="range"
+
+      <Slider
         min={0}
         max={1000}
-        value={seekValue}
-        onChange={(e) => setSeekValue(Number(e.target.value))}
-        style={{ flex: 1, height: 6, cursor: 'pointer', accentColor: '#333' }}
+        step={1}
+        value={[seekValue]}
+        onValueChange={([v]) => setSeekValue(v)}
+        className="flex-1"
       />
-      <span
-        style={{ minWidth: 40, textAlign: 'center', fontSize: 12, color: '#666' }}
-      >
+
+      <span className="min-w-[36px] text-center text-xs text-muted-foreground">
         {SPEEDS[speedIdx]}x
       </span>
-      <button onClick={handleSlower} style={btnStyle(false)}>
+
+      <Button variant="outline" size="sm" className="h-7 w-7 p-0 text-xs" onClick={handleSlower}>
         −
-      </button>
-      <button onClick={handleFaster} style={btnStyle(false)}>
+      </Button>
+      <Button variant="outline" size="sm" className="h-7 w-7 p-0 text-xs" onClick={handleFaster}>
         +
-      </button>
+      </Button>
     </div>
   )
-}
-
-function btnStyle(active: boolean): React.CSSProperties {
-  return {
-    background: active ? '#333' : 'none',
-    color: active ? '#fff' : '#333',
-    border: active ? '1px solid #333' : '1px solid #ddd',
-    borderRadius: 6,
-    padding: '6px 12px',
-    cursor: 'pointer',
-    fontSize: 13,
-    fontFamily: 'inherit',
-  }
 }
 
 function formatTime(value: number): string {
