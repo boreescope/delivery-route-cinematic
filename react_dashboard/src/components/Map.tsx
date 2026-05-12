@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import maplibregl from 'maplibre-gl'
 import { MapboxOverlay } from '@deck.gl/mapbox'
 import type { Layer, PickingInfo } from '@deck.gl/core'
-import { useStore } from '../store'
+import { useStore, MAP_THEME_URLS } from '../store'
 import {
   createPointLayers,
   createArcLayer,
@@ -18,9 +18,6 @@ import type { TripData } from '../layers'
 import { parseCSV } from '../utils/csv'
 import type { DeliveryRecord } from '../types'
 import Playbar from './Playbar'
-
-const CARTO_DARK_MATTER =
-  'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
 const INITIAL_VIEW = {
   center: [126.978, 37.5665] as [number, number],
@@ -49,6 +46,12 @@ function calcDuration(pickUp: string, handOver: string): number | null {
   return diff > 0 ? Math.round(diff / 60000) : null
 }
 
+function getHour(dateStr: string): number {
+  if (!dateStr) return -1
+  const d = new Date(dateStr)
+  return isNaN(d.getTime()) ? -1 : d.getHours()
+}
+
 export default function Map() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
@@ -65,7 +68,39 @@ export default function Map() {
   const data = useStore((s) => s.data)
   const layers = useStore((s) => s.layers)
   const layerSettings = useStore((s) => s.layerSettings)
+  const filters = useStore((s) => s.filters)
+  const theme = useStore((s) => s.theme)
   const setData = useStore((s) => s.setData)
+
+  // Filter data based on store filters
+  const filteredData = useMemo(() => {
+    if (data.length === 0) return data
+    return data.filter((r) => {
+      // Time range filter
+      const hour = getHour(r.pick_up_date)
+      if (hour >= 0) {
+        if (hour < filters.timeRange[0] || hour >= filters.timeRange[1]) return false
+      }
+
+      // Duration filter
+      const dur = calcDuration(r.pick_up_date, r.hand_over_date)
+      if (dur !== null) {
+        if (dur < filters.durationRange[0] || dur > filters.durationRange[1]) return false
+      }
+
+      // Distance filter
+      const dist = calcDistance(r.shop_lat, r.shop_lon, r.dlvry_lat, r.dlvry_lon)
+      if (dist < filters.distanceRange[0] || dist > filters.distanceRange[1]) return false
+
+      // Region/text search filter
+      if (filters.regionQuery) {
+        const q = filters.regionQuery.toLowerCase()
+        if (!r.ord_no.toLowerCase().includes(q)) return false
+      }
+
+      return true
+    })
+  }, [data, filters])
 
   // Initialize route engine
   useEffect(() => {
@@ -89,18 +124,17 @@ export default function Map() {
   // Route layer: process records when toggled on
   useEffect(() => {
     if (!routeEngineRef.current) return
-    if (layers.route && data.length > 0) {
-      routeEngineRef.current.processRecords(data)
+    if (layers.route && filteredData.length > 0) {
+      routeEngineRef.current.processRecords(filteredData)
     } else {
       routeEngineRef.current.reset()
     }
-  }, [layers.route, data])
+  }, [layers.route, filteredData])
 
   // Trip layer: build data when toggled on
   useEffect(() => {
-    if (layers.trip && data.length > 0) {
-      // Limit to first 50 records for performance
-      const subset = data.slice(0, 50)
+    if (layers.trip && filteredData.length > 0) {
+      const subset = filteredData.slice(0, 50)
       buildTripData(subset).then((td) => {
         setTripData(td)
       })
@@ -111,13 +145,13 @@ export default function Map() {
         tripAnimRef.current = null
       }
     }
-  }, [layers.trip, data])
+  }, [layers.trip, filteredData])
 
   // Trip animation loop
   useEffect(() => {
     if (tripData.length === 0) return
     const [minT, maxT] = getTripTimeRange(tripData)
-    const duration = 30000 // 30 seconds loop
+    const duration = 30000
     const startMs = performance.now()
 
     const animate = () => {
@@ -182,7 +216,7 @@ export default function Map() {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: CARTO_DARK_MATTER,
+      style: MAP_THEME_URLS[theme],
       center: INITIAL_VIEW.center,
       zoom: INITIAL_VIEW.zoom,
     })
@@ -201,7 +235,13 @@ export default function Map() {
       mapRef.current = null
       overlayRef.current = null
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update map style when theme changes
+  useEffect(() => {
+    if (!mapRef.current) return
+    mapRef.current.setStyle(MAP_THEME_URLS[theme])
+  }, [theme])
 
   // Update layers when data or visibility changes
   useEffect(() => {
@@ -209,20 +249,20 @@ export default function Map() {
 
     const deckLayers: Layer[] = []
 
-    if (layers.point && data.length > 0) {
-      deckLayers.push(...createPointLayers(data))
+    if (layers.point && filteredData.length > 0) {
+      deckLayers.push(...createPointLayers(filteredData))
     }
-    if (layers.arc && data.length > 0) {
-      deckLayers.push(createArcLayer(data))
+    if (layers.arc && filteredData.length > 0) {
+      deckLayers.push(createArcLayer(filteredData))
     }
-    if (layers.heatmap && data.length > 0) {
-      deckLayers.push(createHeatmapLayer(data, layerSettings.heatmap))
+    if (layers.heatmap && filteredData.length > 0) {
+      deckLayers.push(createHeatmapLayer(filteredData, layerSettings.heatmap))
     }
-    if (layers.hexbin && data.length > 0) {
-      deckLayers.push(createHexbinLayer(data, layerSettings.hexbin))
+    if (layers.hexbin && filteredData.length > 0) {
+      deckLayers.push(createHexbinLayer(filteredData, layerSettings.hexbin))
     }
-    if (layers.cluster && data.length > 0) {
-      deckLayers.push(...createClusterLayers(data, layerSettings.cluster))
+    if (layers.cluster && filteredData.length > 0) {
+      deckLayers.push(...createClusterLayers(filteredData, layerSettings.cluster))
     }
 
     // Route layers
@@ -239,7 +279,7 @@ export default function Map() {
       layers: deckLayers,
       onHover: layers.route ? undefined : onHover,
     })
-  }, [data, layers, layerSettings, onHover, onRouteHover, onRouteClick, routeRevision, tripData, tripTime])
+  }, [filteredData, layers, layerSettings, onHover, onRouteHover, onRouteClick, routeRevision, tripData, tripTime])
 
   const showPlaybar = layers.route && routeEngineRef.current?.hasData()
 
