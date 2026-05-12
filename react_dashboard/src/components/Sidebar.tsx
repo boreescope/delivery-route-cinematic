@@ -43,8 +43,12 @@ const RADIUS_LABELS: Partial<Record<keyof LayerVisibility, { label: string; min:
 
 const THEME_OPTIONS: { value: MapTheme; label: string }[] = [
   { value: 'dark-matter', label: '🌑 Dark Matter' },
+  { value: 'dark-matter-nolabels', label: '🌑 Dark (라벨 없음)' },
   { value: 'positron', label: '⬜ Positron' },
+  { value: 'positron-nolabels', label: '⬜ Positron (라벨 없음)' },
   { value: 'voyager', label: '🗺️ Voyager' },
+  { value: 'liberty', label: '🏛️ Liberty' },
+  { value: 'osm-bright', label: '☀️ OSM Bright' },
 ]
 
 const PALETTE_OPTIONS: { value: ColorPalette; label: string }[] = [

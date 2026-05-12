@@ -32,6 +32,19 @@ const VIEW_PRESETS = [
   { label: '🦅', title: '버드아이', pitch: 60, bearing: -45 },
 ] as const
 
+const AREA_PRESETS = [
+  { label: '서울', center: [126.978, 37.5665] as [number, number], zoom: 11 },
+  { label: '강남', center: [127.0495, 37.5172] as [number, number], zoom: 13 },
+  { label: '송파', center: [127.1058, 37.5048] as [number, number], zoom: 13 },
+  { label: '마포', center: [126.9082, 37.5572] as [number, number], zoom: 13 },
+  { label: '홍대', center: [126.9246, 37.5563] as [number, number], zoom: 14 },
+  { label: '이태원', center: [126.9942, 37.5340] as [number, number], zoom: 14 },
+  { label: '잠실', center: [127.0857, 37.5133] as [number, number], zoom: 14 },
+  { label: '건대', center: [127.0688, 37.5407] as [number, number], zoom: 14 },
+  { label: '여의도', center: [126.9249, 37.5219] as [number, number], zoom: 14 },
+  { label: '종로', center: [126.9816, 37.5704] as [number, number], zoom: 14 },
+] as const
+
 interface TooltipInfo {
   x: number
   y: number
@@ -67,6 +80,8 @@ export default function Map() {
   const routeEngineRef = useRef<RouteAnimationEngine | null>(null)
   const [tooltip, setTooltip] = useState<TooltipInfo | null>(null)
   const [routeRevision, setRouteRevision] = useState(0)
+  const [touring, setTouring] = useState(false)
+  const tourTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Trip layer state
   const [tripData, setTripData] = useState<TripData[]>([])
@@ -305,6 +320,49 @@ export default function Map() {
     })
   }, [])
 
+  const flyToArea = useCallback((center: [number, number], zoom: number) => {
+    if (!mapRef.current) return
+    mapRef.current.flyTo({
+      center,
+      zoom,
+      duration: 1500,
+    })
+  }, [])
+
+  // Auto tour
+  useEffect(() => {
+    if (!touring) {
+      if (tourTimerRef.current) {
+        clearTimeout(tourTimerRef.current)
+        tourTimerRef.current = null
+      }
+      return
+    }
+
+    let idx = 0
+    const step = () => {
+      if (!mapRef.current) return
+      const area = AREA_PRESETS[idx % AREA_PRESETS.length]
+      mapRef.current.flyTo({
+        center: area.center,
+        zoom: area.zoom,
+        duration: 2000,
+        pitch: 45,
+        bearing: (idx * 30) % 360 - 180,
+      })
+      idx++
+      tourTimerRef.current = setTimeout(step, 5000)
+    }
+    step()
+
+    return () => {
+      if (tourTimerRef.current) {
+        clearTimeout(tourTimerRef.current)
+        tourTimerRef.current = null
+      }
+    }
+  }, [touring])
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       {tooltip && (
@@ -351,6 +409,42 @@ export default function Map() {
             <span className="text-base">{preset.label}</span>
           </button>
         ))}
+      </div>
+
+      {/* Area Preset Buttons */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 16,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 10,
+          display: 'flex',
+          gap: 4,
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          maxWidth: '70vw',
+        }}
+      >
+        {AREA_PRESETS.map((area) => (
+          <button
+            key={area.label}
+            onClick={() => flyToArea(area.center, area.zoom)}
+            className="px-2.5 py-1 rounded-md bg-card/85 border border-border backdrop-blur-sm text-[11px] text-foreground hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+          >
+            {area.label}
+          </button>
+        ))}
+        <button
+          onClick={() => setTouring((t) => !t)}
+          className={`px-2.5 py-1 rounded-md border backdrop-blur-sm text-[11px] transition-colors cursor-pointer ${
+            touring
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-card/85 border-border text-foreground hover:bg-primary hover:text-primary-foreground'
+          }`}
+        >
+          {touring ? '⏹ 정지' : '▶ 순회'}
+        </button>
       </div>
 
       <Playbar visible={!!showPlaybar} />

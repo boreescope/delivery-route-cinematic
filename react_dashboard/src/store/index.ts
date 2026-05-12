@@ -23,13 +23,17 @@ export interface Filters {
   regionQuery: string
 }
 
-export type MapTheme = 'dark-matter' | 'positron' | 'voyager'
+export type MapTheme = 'dark-matter' | 'positron' | 'voyager' | 'dark-matter-nolabels' | 'positron-nolabels' | 'liberty' | 'osm-bright'
 export type ColorPalette = 'default' | 'rainbow' | 'mint' | 'warm' | 'cool'
 
 export const MAP_THEME_URLS: Record<MapTheme, string> = {
   'dark-matter': 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
   positron: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
   voyager: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+  'dark-matter-nolabels': 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json',
+  'positron-nolabels': 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json',
+  liberty: 'https://tiles.openfreemap.org/styles/liberty',
+  'osm-bright': 'https://tiles.openfreemap.org/styles/bright',
 }
 
 export const COLOR_PALETTES: Record<ColorPalette, [number, number, number][]> = {
