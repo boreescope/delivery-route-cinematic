@@ -3,7 +3,13 @@ import maplibregl from 'maplibre-gl'
 import { MapboxOverlay } from '@deck.gl/mapbox'
 import type { Layer, PickingInfo } from '@deck.gl/core'
 import { useStore } from '../store'
-import { createPointLayers, createArcLayer } from '../layers'
+import {
+  createPointLayers,
+  createArcLayer,
+  createHeatmapLayer,
+  createHexbinLayer,
+  createClusterLayers,
+} from '../layers'
 import { parseCSV } from '../utils/csv'
 import type { DeliveryRecord } from '../types'
 
@@ -46,6 +52,7 @@ export default function Map() {
 
   const data = useStore((s) => s.data)
   const layers = useStore((s) => s.layers)
+  const layerSettings = useStore((s) => s.layerSettings)
   const setData = useStore((s) => s.setData)
 
   // Auto-load sample data on first mount
@@ -109,12 +116,21 @@ export default function Map() {
     if (layers.arc && data.length > 0) {
       deckLayers.push(createArcLayer(data))
     }
+    if (layers.heatmap && data.length > 0) {
+      deckLayers.push(createHeatmapLayer(data, layerSettings.heatmap))
+    }
+    if (layers.hexbin && data.length > 0) {
+      deckLayers.push(createHexbinLayer(data, layerSettings.hexbin))
+    }
+    if (layers.cluster && data.length > 0) {
+      deckLayers.push(...createClusterLayers(data, layerSettings.cluster))
+    }
 
     overlayRef.current.setProps({
       layers: deckLayers,
       onHover,
     })
-  }, [data, layers, onHover])
+  }, [data, layers, layerSettings, onHover])
 
   return (
     <div ref={containerRef} style={{ width: '100vw', height: '100vh' }}>

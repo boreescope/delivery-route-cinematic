@@ -1,2 +1,5 @@
 export { createPointLayers } from './PointLayer'
 export { createArcLayer } from './ArcLayer'
+export { createHeatmapLayer } from './HeatmapLayer'
+export { createHexbinLayer } from './HexbinLayer'
+export { createClusterLayers } from './ClusterLayer'
