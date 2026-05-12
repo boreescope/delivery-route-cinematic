@@ -9,9 +9,15 @@ import {
   createHeatmapLayer,
   createHexbinLayer,
   createClusterLayers,
+  RouteAnimationEngine,
+  createTripLayer,
+  buildTripData,
+  getTripTimeRange,
 } from '../layers'
+import type { TripData } from '../layers'
 import { parseCSV } from '../utils/csv'
 import type { DeliveryRecord } from '../types'
+import Playbar from './Playbar'
 
 const CARTO_DARK_MATTER =
   'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
@@ -24,8 +30,7 @@ const INITIAL_VIEW = {
 interface TooltipInfo {
   x: number
   y: number
-  record: DeliveryRecord
-  layerType: string
+  text: string
 }
 
 function calcDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -48,12 +53,26 @@ export default function Map() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const overlayRef = useRef<MapboxOverlay | null>(null)
+  const routeEngineRef = useRef<RouteAnimationEngine | null>(null)
   const [tooltip, setTooltip] = useState<TooltipInfo | null>(null)
+  const [routeRevision, setRouteRevision] = useState(0)
+
+  // Trip layer state
+  const [tripData, setTripData] = useState<TripData[]>([])
+  const [tripTime, setTripTime] = useState(0)
+  const tripAnimRef = useRef<number | null>(null)
 
   const data = useStore((s) => s.data)
   const layers = useStore((s) => s.layers)
   const layerSettings = useStore((s) => s.layerSettings)
   const setData = useStore((s) => s.setData)
+
+  // Initialize route engine
+  useEffect(() => {
+    routeEngineRef.current = new RouteAnimationEngine(() => {
+      setRouteRevision((r) => r + 1)
+    })
+  }, [])
 
   // Auto-load sample data on first mount
   useEffect(() => {
@@ -67,11 +86,91 @@ export default function Map() {
       .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Hover handler
+  // Route layer: process records when toggled on
+  useEffect(() => {
+    if (!routeEngineRef.current) return
+    if (layers.route && data.length > 0) {
+      routeEngineRef.current.processRecords(data)
+    } else {
+      routeEngineRef.current.reset()
+    }
+  }, [layers.route, data])
+
+  // Trip layer: build data when toggled on
+  useEffect(() => {
+    if (layers.trip && data.length > 0) {
+      // Limit to first 50 records for performance
+      const subset = data.slice(0, 50)
+      buildTripData(subset).then((td) => {
+        setTripData(td)
+      })
+    } else {
+      setTripData([])
+      if (tripAnimRef.current) {
+        cancelAnimationFrame(tripAnimRef.current)
+        tripAnimRef.current = null
+      }
+    }
+  }, [layers.trip, data])
+
+  // Trip animation loop
+  useEffect(() => {
+    if (tripData.length === 0) return
+    const [minT, maxT] = getTripTimeRange(tripData)
+    const duration = 30000 // 30 seconds loop
+    const startMs = performance.now()
+
+    const animate = () => {
+      const elapsed = performance.now() - startMs
+      const progress = (elapsed % duration) / duration
+      const currentTime = minT + progress * (maxT - minT)
+      setTripTime(currentTime)
+      tripAnimRef.current = requestAnimationFrame(animate)
+    }
+    tripAnimRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (tripAnimRef.current) {
+        cancelAnimationFrame(tripAnimRef.current)
+        tripAnimRef.current = null
+      }
+    }
+  }, [tripData])
+
+  // Route hover/click handlers
+  const onRouteHover = useCallback((info: PickingInfo) => {
+    if (!routeEngineRef.current) return
+    const gid = routeEngineRef.current.handleHover(info)
+    if (gid && info.object && 'tipText' in info.object) {
+      const obj = info.object as { tipText: string; label?: string }
+      setTooltip({
+        x: info.x,
+        y: info.y,
+        text: obj.tipText + (obj.label ? ' ' + obj.label : ''),
+      })
+    } else {
+      setTooltip(null)
+    }
+    setRouteRevision((r) => r + 1)
+  }, [])
+
+  const onRouteClick = useCallback((info: PickingInfo) => {
+    if (!routeEngineRef.current) return
+    routeEngineRef.current.handleClick(info)
+    setRouteRevision((r) => r + 1)
+  }, [])
+
+  // Standard layer hover
   const onHover = useCallback((info: PickingInfo) => {
     if (info.object) {
-      const layerType = info.layer?.id?.includes('arc') ? 'arc' : 'point'
-      setTooltip({ x: info.x, y: info.y, record: info.object as DeliveryRecord, layerType })
+      const record = info.object as DeliveryRecord
+      const dist = calcDistance(record.shop_lat, record.shop_lon, record.dlvry_lat, record.dlvry_lon)
+      const dur = calcDuration(record.pick_up_date, record.hand_over_date)
+      setTooltip({
+        x: info.x,
+        y: info.y,
+        text: `🛵 ${record.ord_no} | ${dist.toFixed(2)}km${dur ? ` | ${dur}분` : ''}`,
+      })
     } else {
       setTooltip(null)
     }
@@ -126,11 +225,23 @@ export default function Map() {
       deckLayers.push(...createClusterLayers(data, layerSettings.cluster))
     }
 
+    // Route layers
+    if (layers.route && routeEngineRef.current) {
+      deckLayers.push(...routeEngineRef.current.createLayers(onRouteHover, onRouteClick))
+    }
+
+    // Trip layer
+    if (layers.trip && tripData.length > 0) {
+      deckLayers.push(createTripLayer(tripData, tripTime))
+    }
+
     overlayRef.current.setProps({
       layers: deckLayers,
-      onHover,
+      onHover: layers.route ? undefined : onHover,
     })
-  }, [data, layers, layerSettings, onHover])
+  }, [data, layers, layerSettings, onHover, onRouteHover, onRouteClick, routeRevision, tripData, tripTime])
+
+  const showPlaybar = layers.route && routeEngineRef.current?.hasData()
 
   return (
     <div ref={containerRef} style={{ width: '100vw', height: '100vh' }}>
@@ -152,24 +263,10 @@ export default function Map() {
             backdropFilter: 'blur(4px)',
           }}
         >
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>
-            🛵 {tooltip.record.ord_no}
-          </div>
-          <div>
-            거리: {calcDistance(
-              tooltip.record.shop_lat,
-              tooltip.record.shop_lon,
-              tooltip.record.dlvry_lat,
-              tooltip.record.dlvry_lon
-            ).toFixed(2)} km
-          </div>
-          {calcDuration(tooltip.record.pick_up_date, tooltip.record.hand_over_date) !== null && (
-            <div>
-              소요: {calcDuration(tooltip.record.pick_up_date, tooltip.record.hand_over_date)}분
-            </div>
-          )}
+          {tooltip.text}
         </div>
       )}
+      <Playbar visible={!!showPlaybar} />
     </div>
   )
 }
