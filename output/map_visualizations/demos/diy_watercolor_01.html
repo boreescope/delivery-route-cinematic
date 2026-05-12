@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DIY Watercolor - 텍스처 실험</title>
+  <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    #container { position: relative; width: 100%; height: 100%; }
+    #map { width: 100%; height: 100%; }
+
+    /* 1. 지도 색상 조정 - 파스텔 톤 */
+    #map canvas {
+      filter: saturate(0.5) brightness(1.1) contrast(0.85);
+    }
+
+    /* 2. 수채화 종이 텍스처 오버레이 */
+    #texture {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      /* 실제로는 스캔한 수채화 종이 이미지 사용 */
+      /* 여기선 SVG 노이즈로 시뮬레이션 */
+      background-image: url('data:image/svg+xml,\
+        <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">\
+          <filter id="paper">\
+            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="5" result="noise"/>\
+            <feDiffuseLighting in="noise" lighting-color="%23f5f0e6" surfaceScale="2">\
+              <feDistantLight azimuth="45" elevation="60"/>\
+            </feDiffuseLighting>\
+          </filter>\
+          <rect width="100%" height="100%" filter="url(%23paper)"/>\
+        </svg>');
+      opacity: 0.15;
+      mix-blend-mode: multiply;
+      z-index: 1;
+    }
+
+    /* 3. 가장자리 비네팅 (번짐 느낌) */
+    #vignette {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center,
+        transparent 40%,
+        rgba(139, 119, 101, 0.1) 70%,
+        rgba(139, 119, 101, 0.2) 100%);
+      z-index: 2;
+    }
+
+    /* 컨트롤 패널 */
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.95);
+      padding: 15px;
+      border-radius: 8px;
+      font-family: sans-serif;
+      font-size: 13px;
+      z-index: 10;
+      max-width: 280px;
+    }
+    .controls h3 { margin: 0 0 10px 0; font-size: 14px; }
+    .controls label { display: block; margin: 8px 0; }
+    .controls input[type="range"] { width: 100%; }
+    .controls input[type="checkbox"] { margin-right: 8px; }
+  </style>
+</head>
+<body>
+<div id="container">
+  <div id="map"></div>
+  <div id="texture"></div>
+  <div id="vignette"></div>
+</div>
+
+<div class="controls">
+  <h3>수채화 효과 조절</h3>
+  <label>
+    <input type="checkbox" id="toggleTexture" checked> 종이 텍스처
+  </label>
+  <label>
+    <input type="checkbox" id="toggleVignette" checked> 가장자리 번짐
+  </label>
+  <label>
+    채도: <input type="range" id="saturation" min="0" max="100" value="50">
+  </label>
+  <label>
+    밝기: <input type="range" id="brightness" min="80" max="130" value="110">
+  </label>
+  <label>
+    대비: <input type="range" id="contrast" min="50" max="100" value="85">
+  </label>
+  <label>
+    텍스처 강도: <input type="range" id="textureOpacity" min="0" max="40" value="15">
+  </label>
+</div>
+
+<script>
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://tiles.openfreemap.org/styles/positron',
+  center: [126.978, 37.5665],
+  zoom: 12
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+// 컨트롤 이벤트
+const canvas = () => document.querySelector('#map canvas');
+const texture = document.getElementById('texture');
+const vignette = document.getElementById('vignette');
+
+document.getElementById('toggleTexture').addEventListener('change', (e) => {
+  texture.style.display = e.target.checked ? 'block' : 'none';
+});
+
+document.getElementById('toggleVignette').addEventListener('change', (e) => {
+  vignette.style.display = e.target.checked ? 'block' : 'none';
+});
+
+function updateFilter() {
+  const sat = document.getElementById('saturation').value / 100;
+  const bright = document.getElementById('brightness').value / 100;
+  const cont = document.getElementById('contrast').value / 100;
+  const c = canvas();
+  if (c) c.style.filter = `saturate(${sat}) brightness(${bright}) contrast(${cont})`;
+}
+
+document.getElementById('saturation').addEventListener('input', updateFilter);
+document.getElementById('brightness').addEventListener('input', updateFilter);
+document.getElementById('contrast').addEventListener('input', updateFilter);
+
+document.getElementById('textureOpacity').addEventListener('input', (e) => {
+  texture.style.opacity = e.target.value / 100;
+});
+
+map.on('load', updateFilter);
+</script>
+</body>
+</html>
