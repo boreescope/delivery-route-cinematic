@@ -1,1 +1,2 @@
-// Layer exports will be added as layers are implemented
+export { createPointLayers } from './PointLayer'
+export { createArcLayer } from './ArcLayer'
