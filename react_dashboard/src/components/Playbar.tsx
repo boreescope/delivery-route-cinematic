@@ -10,7 +10,7 @@ interface PlaybarProps {
   onSpeedChange?: (speed: number) => void
 }
 
-const SPEEDS = [0.5, 1, 2, 4]
+const SPEEDS = [0.5, 1, 2, 4, 8, 15, 30]
 
 export default function Playbar({ visible, onSpeedChange }: PlaybarProps) {
   const [playing, setPlaying] = useState(false)

@@ -79,6 +79,7 @@ export class RouteAnimationEngine {
   private _skipAnimation = false
   private _onUpdate: () => void
   private _pathIdCounter = 0
+  speed = 1 // 애니메이션 속도 배율 (1x ~ 30x)
 
   constructor(onUpdate: () => void) {
     this._onUpdate = onUpdate
@@ -256,7 +257,7 @@ export class RouteAnimationEngine {
           }
           this.pathData = [...this.pathData, pathObj]
 
-          const segDur = Math.max(durationMs * (seg.coords.length / totalPts), 50)
+          const segDur = Math.max(durationMs * (seg.coords.length / totalPts) / this.speed, 50)
           const sStart = performance.now()
 
           const stepLine = (now: number) => {
@@ -289,7 +290,7 @@ export class RouteAnimationEngine {
         } else {
           // 도트 구간
           let di = 0
-          const segDur = Math.max(durationMs * (seg.coords.length / totalPts) * 1.5, 50)
+          const segDur = Math.max(durationMs * (seg.coords.length / totalPts) * 1.5 / this.speed, 50)
           const sStart = performance.now()
 
           const stepDots = (now: number) => {

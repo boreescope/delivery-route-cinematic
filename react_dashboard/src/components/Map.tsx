@@ -464,7 +464,14 @@ export default function Map() {
         </button>
       </div>
 
-      <Playbar visible={!!showPlaybar} />
+      <Playbar
+        visible={!!showPlaybar}
+        onSpeedChange={(speed) => {
+          if (routeEngineRef.current) {
+            routeEngineRef.current.speed = speed
+          }
+        }}
+      />
     </div>
   )
 }
