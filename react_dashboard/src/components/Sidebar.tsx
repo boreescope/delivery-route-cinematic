@@ -49,6 +49,7 @@ const THEME_OPTIONS: { value: MapTheme; label: string }[] = [
   { value: 'voyager', label: '🗺️ Voyager' },
   { value: 'liberty', label: '🏛️ Liberty' },
   { value: 'osm-bright', label: '☀️ OSM Bright' },
+  { value: 'watercolor', label: '🎨 수채화' },
 ]
 
 const PALETTE_OPTIONS: { value: ColorPalette; label: string }[] = [

@@ -268,7 +268,24 @@ export default function Map() {
   // Update map style when theme changes
   useEffect(() => {
     if (!mapRef.current) return
-    mapRef.current.setStyle(MAP_THEME_URLS[theme])
+    const url = MAP_THEME_URLS[theme]
+    if (url === '__raster__') {
+      // Raster tile style (watercolor)
+      mapRef.current.setStyle({
+        version: 8,
+        sources: {
+          watercolor: {
+            type: 'raster',
+            tiles: ['https://watercolormaps.collection.cooperhewitt.org/tile/watercolor/{z}/{x}/{y}.jpg'],
+            tileSize: 256,
+            attribution: '© Cooper Hewitt | Stamen Design | OSM',
+          },
+        },
+        layers: [{ id: 'watercolor-tiles', type: 'raster', source: 'watercolor' }],
+      })
+    } else {
+      mapRef.current.setStyle(url)
+    }
   }, [theme])
 
   // Update layers when data or visibility changes

@@ -23,7 +23,7 @@ export interface Filters {
   regionQuery: string
 }
 
-export type MapTheme = 'dark-matter' | 'positron' | 'voyager' | 'dark-matter-nolabels' | 'positron-nolabels' | 'liberty' | 'osm-bright'
+export type MapTheme = 'dark-matter' | 'positron' | 'voyager' | 'dark-matter-nolabels' | 'positron-nolabels' | 'liberty' | 'osm-bright' | 'watercolor'
 export type ColorPalette = 'default' | 'rainbow' | 'mint' | 'warm' | 'cool'
 
 export const MAP_THEME_URLS: Record<MapTheme, string> = {
@@ -34,6 +34,7 @@ export const MAP_THEME_URLS: Record<MapTheme, string> = {
   'positron-nolabels': 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json',
   liberty: 'https://tiles.openfreemap.org/styles/liberty',
   'osm-bright': 'https://tiles.openfreemap.org/styles/bright',
+  watercolor: '__raster__',
 }
 
 export const COLOR_PALETTES: Record<ColorPalette, [number, number, number][]> = {
