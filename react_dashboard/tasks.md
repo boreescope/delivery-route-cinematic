@@ -7,7 +7,7 @@ spec: /Users/jinsol/Documents/리서치_260410_배달동선/react_dashboard/spec
 - [x] 1.1: Vite + React + TypeScript 프로젝트 생성 (`react_dashboard/` 내부)
 - [x] 1.2: MapLibre GL JS + deck.gl + Zustand 설치
 - [x] 1.3: 기본 전체화면 지도 렌더링 (CARTO DarkMatter 타일)
-- [ ] 1.4: 폴더 구조 세팅 (components/, layers/, store/, utils/, types.ts)
+- [x] 1.4: 폴더 구조 세팅 (components/, layers/, store/, utils/, types.ts)
 - [ ] 1.5: 개발 서버 실행 확인 (vite dev)
 
 ## Task 2: CSV 업로드 + Point/Arc 레이어 [pending]
