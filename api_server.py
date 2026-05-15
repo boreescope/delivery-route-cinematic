@@ -39,39 +39,24 @@ TRINO_USER = os.environ.get("TRINO_USER", "")
 TRINO_PASSWORD = os.environ.get("TRINO_PASSWORD", "")
 
 QUERY_TEMPLATE = """
-WITH completed AS (
-  SELECT ord_no, log_ts AS completed_ts,
+SELECT
+    ord_no,
+    event,
+    log_ts,
     CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) AS shop_lat,
     CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) AS shop_lon,
     CAST(json_extract_scalar(details, '$.customerLocation.latitude') AS DOUBLE) AS dlvry_lat,
     CAST(json_extract_scalar(details, '$.customerLocation.longitude') AS DOUBLE) AS dlvry_lon,
     json_extract_scalar(details, '$.deliveryMethod') AS delivery_method,
-    json_extract_scalar(details, '$.isSingle') AS is_single,
-    json_extract_scalar(details, '$.agencyId') AS agency_id
-  FROM raw_log.serverlog_delivery_status_change
-  WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{minutes}' MINUTE) AT TIME ZONE 'Asia/Seoul'
-                   AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
-    AND event = 'DELIVERY_COMPLETED'
-    AND json_extract_scalar(details, '$.shopLocation.latitude') IS NOT NULL
-    AND json_extract_scalar(details, '$.customerLocation.latitude') IS NOT NULL
-    AND CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) BETWEEN 37.42 AND 37.70
-    AND CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) BETWEEN 126.76 AND 127.18
-),
-pickup AS (
-  SELECT ord_no, MAX(log_ts) AS pickup_ts
-  FROM raw_log.serverlog_delivery_status_change
-  WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{pickup_range}' MINUTE) AT TIME ZONE 'Asia/Seoul'
-                   AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
-    AND event = 'PICKUP_COMPLETED'
-  GROUP BY ord_no
-)
-SELECT c.ord_no, c.shop_lat, c.shop_lon, c.dlvry_lat, c.dlvry_lon,
-       c.delivery_method, c.is_single, c.agency_id,
-       p.pickup_ts, c.completed_ts,
-       DATE_DIFF('second', p.pickup_ts, c.completed_ts) AS actual_seconds
-FROM completed c
-JOIN pickup p ON c.ord_no = p.ord_no
-WHERE DATE_DIFF('second', p.pickup_ts, c.completed_ts) BETWEEN 60 AND 7200
+    json_extract_scalar(details, '$.isSingle') AS is_single
+FROM raw_log.serverlog_delivery_status_change
+WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{minutes}' MINUTE) AT TIME ZONE 'Asia/Seoul'
+                 AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
+  AND event IN ('PICKUP_COMPLETED', 'DELIVERY_COMPLETED')
+  AND json_extract_scalar(details, '$.shopLocation.latitude') IS NOT NULL
+  AND json_extract_scalar(details, '$.customerLocation.latitude') IS NOT NULL
+  AND CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) BETWEEN 37.42 AND 37.70
+  AND CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) BETWEEN 126.76 AND 127.18
 LIMIT {limit}
 """
 
@@ -92,7 +77,7 @@ def get_connection():
     )
 
 
-def fetch_data(minutes: int = 60, limit: int = 100000) -> dict:
+def fetch_data(minutes: int = 30, limit: int = 100000) -> dict:
     now = time.time()
     if _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
         return _cache["data"]
@@ -100,45 +85,49 @@ def fetch_data(minutes: int = 60, limit: int = 100000) -> dict:
     conn = get_connection()
     try:
         cur = conn.cursor()
-        pickup_range = minutes + 60
-        cur.execute(
-            QUERY_TEMPLATE.format(
-                minutes=minutes, pickup_range=pickup_range, limit=limit
-            )
-        )
+        cur.execute(QUERY_TEMPLATE.format(minutes=minutes, limit=limit))
         columns = [desc[0] for desc in cur.description]
         rows = cur.fetchall()
-        data = [dict(zip(columns, row)) for row in rows]
+        raw = [dict(zip(columns, row)) for row in rows]
     finally:
         conn.close()
 
-    kst = timezone(timedelta(hours=9))
-    output = {
-        "updated_at": datetime.now(kst).isoformat(),
-        "count": len(data),
-        "deliveries": [
-            {
-                "ord_no": d["ord_no"],
+    # ord_no별 그룹핑
+    orders: dict = {}
+    for d in raw:
+        if not d["shop_lat"] or not d["dlvry_lat"]:
+            continue
+        ono = d["ord_no"]
+        if ono not in orders:
+            orders[ono] = {
+                "ord_no": ono,
                 "shop_lat": d["shop_lat"],
                 "shop_lon": d["shop_lon"],
                 "dlvry_lat": d["dlvry_lat"],
                 "dlvry_lon": d["dlvry_lon"],
                 "delivery_method": d["delivery_method"],
                 "is_single": d["is_single"] == "true",
-                "agency_id": d["agency_id"],
-                "pickup_ts": str(d["pickup_ts"]),
-                "completed_ts": str(d["completed_ts"]),
-                "actual_seconds": d["actual_seconds"],
-                "pickup_ms": int(d["pickup_ts"].timestamp() * 1000)
-                if hasattr(d["pickup_ts"], "timestamp")
-                else None,
-                "completed_ms": int(d["completed_ts"].timestamp() * 1000)
-                if hasattr(d["completed_ts"], "timestamp")
-                else None,
+                "pickup_ms": None,
+                "completed_ms": None,
             }
-            for d in data
-            if d["shop_lat"] and d["dlvry_lat"] and d["actual_seconds"]
-        ],
+        ts_ms = (
+            int(d["log_ts"].timestamp() * 1000)
+            if hasattr(d["log_ts"], "timestamp")
+            else None
+        )
+        if d["event"] == "PICKUP_COMPLETED":
+            orders[ono]["pickup_ms"] = ts_ms
+        elif d["event"] == "DELIVERY_COMPLETED":
+            orders[ono]["completed_ms"] = ts_ms
+
+    # pickup이 있는 건만 반환
+    deliveries = [v for v in orders.values() if v["pickup_ms"]]
+
+    kst = timezone(timedelta(hours=9))
+    output = {
+        "updated_at": datetime.now(kst).isoformat(),
+        "count": len(deliveries),
+        "deliveries": deliveries,
     }
 
     _cache["data"] = output
