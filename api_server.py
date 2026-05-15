@@ -129,10 +129,10 @@ def fetch_data(minutes: int = 60, limit: int = 100000) -> dict:
                 "pickup_ts": str(d["pickup_ts"]),
                 "completed_ts": str(d["completed_ts"]),
                 "actual_seconds": d["actual_seconds"],
-                "pickup_ms": int(d["pickup_ts"].timestamp() * 1000) + 9 * 3600000
+                "pickup_ms": int(d["pickup_ts"].timestamp() * 1000)
                 if hasattr(d["pickup_ts"], "timestamp")
                 else None,
-                "completed_ms": int(d["completed_ts"].timestamp() * 1000) + 9 * 3600000
+                "completed_ms": int(d["completed_ts"].timestamp() * 1000)
                 if hasattr(d["completed_ts"], "timestamp")
                 else None,
             }
