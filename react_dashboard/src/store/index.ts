@@ -70,6 +70,8 @@ interface AppState {
   palette: ColorPalette
   setData: (records: DeliveryRecord[]) => void
   setRealtimeMode: (active: boolean) => void
+  realtimeRunning: boolean
+  setRealtimeRunning: (running: boolean) => void
   toggleLayer: (name: keyof LayerVisibility) => void
   updateLayerSetting: (
     name: keyof LayerVisibility,
@@ -88,6 +90,7 @@ const defaultSettings: LayerSettings = { opacity: 0.8, radius: 40 }
 export const useStore = create<AppState>((set, get) => ({
   data: [],
   realtimeMode: false,
+  realtimeRunning: false,
   layers: {
     point: false,
     arc: false,
@@ -116,6 +119,7 @@ export const useStore = create<AppState>((set, get) => ({
   palette: 'default',
   setData: (records) => set({ data: records }),
   setRealtimeMode: (active) => set({ realtimeMode: active }),
+  setRealtimeRunning: (running) => set({ realtimeRunning: running }),
   toggleLayer: (name) =>
     set((state) => ({
       layers: { ...state.layers, [name]: !state.layers[name] },

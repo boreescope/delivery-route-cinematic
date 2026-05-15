@@ -1,16 +1,44 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '../store'
 import { Button } from '@/components/ui/button'
 
+// 모듈 레벨 타이머 (컴포넌트 언마운트에 영향 안 받음)
+let _pollInterval: ReturnType<typeof setInterval> | null = null
+let _countdown = 300
+let _fetchFn: (() => void) | null = null
+
+function startGlobalTimer(fetchFn: () => void) {
+  _fetchFn = fetchFn
+  _countdown = 0 // 즉시 첫 fetch
+  if (_pollInterval) clearInterval(_pollInterval)
+  _pollInterval = setInterval(() => {
+    _countdown--
+    if (_countdown <= 0) {
+      _countdown = 300
+      _fetchFn?.()
+    }
+  }, 1000)
+  fetchFn() // 즉시 실행
+}
+
+function stopGlobalTimer() {
+  if (_pollInterval) {
+    clearInterval(_pollInterval)
+    _pollInterval = null
+  }
+  _fetchFn = null
+}
+
 export default function RealtimePanel() {
-  const [active, setActive] = useState(false)
-  const [countdown, setCountdown] = useState(300)
   const [count, setCount] = useState(0)
   const [lastUpdate, setLastUpdate] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [displayCountdown, setDisplayCountdown] = useState(300)
   const setData = useStore((s) => s.setData)
   const setRealtimeMode = useStore((s) => s.setRealtimeMode)
+  const realtimeRunning = useStore((s) => s.realtimeRunning)
+  const setRealtimeRunning = useStore((s) => s.setRealtimeRunning)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchData = useCallback(async () => {
     setStatus('loading')
@@ -40,34 +68,37 @@ export default function RealtimePanel() {
   }, [setData])
 
   const start = useCallback(() => {
-    setActive(true)
+    setRealtimeRunning(true)
     setRealtimeMode(true)
-    setCountdown(0)
-    fetchData()
-    if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 0) {
-          fetchData()
-          return 300
-        }
-        return c - 1
-      })
-    }, 1000)
-  }, [fetchData, setRealtimeMode])
+    startGlobalTimer(fetchData)
+  }, [fetchData, setRealtimeMode, setRealtimeRunning])
 
   const stop = useCallback(() => {
-    setActive(false)
+    setRealtimeRunning(false)
     setRealtimeMode(false)
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
+    stopGlobalTimer()
     setStatus('idle')
-  }, [setRealtimeMode])
+  }, [setRealtimeMode, setRealtimeRunning])
 
-  const mm = Math.floor(countdown / 60)
-  const ss = countdown % 60
+  // UI 카운트다운 표시 업데이트 (1초마다)
+  useEffect(() => {
+    tickRef.current = setInterval(() => {
+      setDisplayCountdown(_countdown)
+    }, 1000)
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current)
+    }
+  }, [])
+
+  // 컴포넌트 마운트 시 이미 실행 중이면 fetchFn 재연결
+  useEffect(() => {
+    if (realtimeRunning && !_pollInterval) {
+      startGlobalTimer(fetchData)
+    }
+  }, [realtimeRunning, fetchData])
+
+  const mm = Math.floor(displayCountdown / 60)
+  const ss = displayCountdown % 60
   const now = new Date()
   const delayed = new Date(now.getTime() - 5 * 60 * 1000)
   const clock = `${String(delayed.getHours()).padStart(2, '0')}:${String(delayed.getMinutes()).padStart(2, '0')}:${String(delayed.getSeconds()).padStart(2, '0')}`
@@ -107,7 +138,7 @@ export default function RealtimePanel() {
       </div>
 
       {/* 타이머 */}
-      {active && (
+      {realtimeRunning && (
         <div className="text-center">
           <div className="text-lg font-bold text-foreground tabular-nums">
             {mm}:{String(ss).padStart(2, '0')}
@@ -125,7 +156,7 @@ export default function RealtimePanel() {
 
       {/* 버튼 */}
       <div className="flex gap-2">
-        {!active ? (
+        {!realtimeRunning ? (
           <Button variant="default" size="sm" className="flex-1 text-xs h-7" onClick={start}>
             ▶ 시작
           </Button>
@@ -139,7 +170,7 @@ export default function RealtimePanel() {
               size="sm"
               className="flex-1 text-xs h-7"
               onClick={() => {
-                setCountdown(0)
+                _countdown = 0
                 fetchData()
               }}
             >
