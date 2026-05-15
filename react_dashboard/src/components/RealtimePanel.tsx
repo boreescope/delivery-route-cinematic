@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 
 // 모듈 레벨 타이머 (컴포넌트 언마운트에 영향 안 받음)
 let _pollInterval: ReturnType<typeof setInterval> | null = null
-let _countdown = 300
+let _countdown = 60
 let _fetchFn: (() => void) | null = null
 let _lastCount = 0
 let _lastUpdate: string | null = null
@@ -17,7 +17,7 @@ function startGlobalTimer(fetchFn: () => void) {
   _pollInterval = setInterval(() => {
     _countdown--
     if (_countdown <= 0) {
-      _countdown = 300
+      _countdown = 60
       _fetchFn?.()
     }
   }, 1000)

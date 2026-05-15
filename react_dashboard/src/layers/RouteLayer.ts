@@ -88,50 +88,63 @@ export class RouteAnimationEngine {
         const job = this.jobs.get(r.ord_no)!
         if (completedMs && !job.completedMs) {
           job.completedMs = completedMs
-          // scale 조정: 실제 완료 시각에 맞춰 남은 경로 속도 조정
-          // (다음 프레임에서 자동 반영됨)
         }
       } else {
         // 신규 job
         if (!completedMs) {
-          // 진행 중인 건만 신규로 추가 (이미 완료된 건은 무시)
           newJobs.push({ record: r, pickupMs, completedMs })
         }
       }
     }
 
-    // 신규 job에 대해 OSRM 요청 (병렬 3개)
-    const queue = [...newJobs]
-    const worker = async () => {
-      while (queue.length > 0) {
-        const item = queue.shift()!
-        const { record, pickupMs, completedMs } = item
-        const route = await getRoute(record.shop_lat, record.shop_lon, record.dlvry_lat, record.dlvry_lon)
-        if (!route) continue
+    // 신규 건을 pickup_ts 순 정렬 → 실제 시각 간격에 맞춰 순차 추가
+    newJobs.sort((a, b) => a.pickupMs - b.pickupMs)
 
-        const job: Job = {
-          ord_no: record.ord_no,
-          shopLat: record.shop_lat,
-          shopLon: record.shop_lon,
-          dlvryLat: record.dlvry_lat,
-          dlvryLon: record.dlvry_lon,
-          pickupMs,
-          completedMs,
-          route,
-          osrmDurationMs: route.duration * 1000 * 3, // OSRM(차) × 3 = 실제 바이크 배달 (데이터 기반)
-          color: randColor(),
-          startedAt: pickupMs, // 픽업 시각부터 시작
-        }
-        this.jobs.set(record.ord_no, job)
+    if (newJobs.length > 0) {
+      const baseTime = newJobs[0].pickupMs
+      const timeSpan = newJobs[newJobs.length - 1].pickupMs - baseTime
+      // 실제 시간 간격을 60초 안에 재생 (1분 폴링 주기에 맞춤)
+      const scale = timeSpan > 0 ? Math.min(60000 / timeSpan, 1) : 1
+
+      for (const item of newJobs) {
+        const delay = (item.pickupMs - baseTime) * scale
+        setTimeout(() => {
+          this._addJob(item.record, item.pickupMs, item.completedMs)
+        }, delay)
       }
     }
-    await Promise.all(Array(Math.min(3, queue.length || 1)).fill(null).map(() => worker()))
 
-    // 애니메이션 루프 시작 (아직 안 돌고 있으면)
-    if (!this._animFrame && this.jobs.size > 0) {
+    // 애니메이션 루프 시작
+    if (!this._animFrame && (this.jobs.size > 0 || newJobs.length > 0)) {
       this._startAnimLoop()
     }
 
+    this._onUpdate()
+  }
+
+  /** 단일 job 추가 (OSRM 요청 + jobs Map에 등록) */
+  private async _addJob(record: DeliveryRecord, pickupMs: number, completedMs: number | null): Promise<void> {
+    const route = await getRoute(record.shop_lat, record.shop_lon, record.dlvry_lat, record.dlvry_lon)
+    if (!route) return
+
+    const job: Job = {
+      ord_no: record.ord_no,
+      shopLat: record.shop_lat,
+      shopLon: record.shop_lon,
+      dlvryLat: record.dlvry_lat,
+      dlvryLon: record.dlvry_lon,
+      pickupMs,
+      completedMs,
+      route,
+      osrmDurationMs: route.duration * 1000 * 3,
+      color: randColor(),
+      startedAt: pickupMs,
+    }
+    this.jobs.set(record.ord_no, job)
+
+    if (!this._animFrame) {
+      this._startAnimLoop()
+    }
     this._onUpdate()
   }
 
