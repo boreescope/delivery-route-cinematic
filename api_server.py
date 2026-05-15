@@ -38,6 +38,13 @@ TRINO_PORT = int(os.environ.get("TRINO_PORT", "443"))
 TRINO_USER = os.environ.get("TRINO_USER", "")
 TRINO_PASSWORD = os.environ.get("TRINO_PASSWORD", "")
 
+# Secret 파일 마운트 지원 (/mnt/secrets/trino-user, /mnt/secrets/trino-password)
+_secret_dir = Path("/mnt/secrets")
+if not TRINO_USER and (_secret_dir / "trino-user").exists():
+    TRINO_USER = (_secret_dir / "trino-user").read_text().strip()
+if not TRINO_PASSWORD and (_secret_dir / "trino-password").exists():
+    TRINO_PASSWORD = (_secret_dir / "trino-password").read_text().strip()
+
 QUERY_TEMPLATE = """
 SELECT
     ord_no,
