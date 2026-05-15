@@ -3,19 +3,7 @@ import maplibregl from 'maplibre-gl'
 import { MapboxOverlay } from '@deck.gl/mapbox'
 import type { Layer, PickingInfo } from '@deck.gl/core'
 import { useStore, MAP_THEME_URLS } from '../store'
-import {
-  createPointLayers,
-  createArcLayer,
-  createHeatmapLayer,
-  createHexbinLayer,
-  createClusterLayers,
-  RouteAnimationEngine,
-  createTripLayer,
-  buildTripData,
-  getTripTimeRange,
-} from '../layers'
-import type { TripData } from '../layers'
-import { parseCSV } from '../utils/csv'
+import { RouteAnimationEngine } from '../layers'
 import type { DeliveryRecord } from '../types'
 import Playbar from './Playbar'
 
@@ -83,11 +71,6 @@ export default function Map() {
   const [touring, setTouring] = useState(false)
   const tourTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Trip layer state
-  const [tripData, setTripData] = useState<TripData[]>([])
-  const [tripTime, setTripTime] = useState(0)
-  const tripAnimRef = useRef<number | null>(null)
-
   const data = useStore((s) => s.data)
   const layers = useStore((s) => s.layers)
   const layerSettings = useStore((s) => s.layerSettings)
@@ -132,17 +115,17 @@ export default function Map() {
     })
   }, [])
 
-  // Auto-load sample data on first mount
-  useEffect(() => {
-    if (data.length > 0) return
-    fetch('/sample_data.csv')
-      .then((r) => r.text())
-      .then((text) => {
-        const records = parseCSV(text)
-        if (records.length > 0) setData(records)
-      })
-      .catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-load sample data on first mount — 비활성 (실시간 모드에서는 불필요)
+  // useEffect(() => {
+  //   if (data.length > 0) return
+  //   fetch('/sample_data.csv')
+  //     .then((r) => r.text())
+  //     .then((text) => {
+  //       const records = parseCSV(text)
+  //       if (records.length > 0) setData(records)
+  //     })
+  //     .catch(() => {})
+  // }, [])
 
   // Route layer: process records when toggled on
   useEffect(() => {
@@ -153,46 +136,6 @@ export default function Map() {
       routeEngineRef.current.reset()
     }
   }, [layers.route, filteredData])
-
-  // Trip layer: build data when toggled on
-  useEffect(() => {
-    if (layers.trip && filteredData.length > 0) {
-      const subset = filteredData.slice(0, 50)
-      buildTripData(subset).then((td) => {
-        setTripData(td)
-      })
-    } else {
-      setTripData([])
-      if (tripAnimRef.current) {
-        cancelAnimationFrame(tripAnimRef.current)
-        tripAnimRef.current = null
-      }
-    }
-  }, [layers.trip, filteredData])
-
-  // Trip animation loop
-  useEffect(() => {
-    if (tripData.length === 0) return
-    const [minT, maxT] = getTripTimeRange(tripData)
-    const duration = 30000
-    const startMs = performance.now()
-
-    const animate = () => {
-      const elapsed = performance.now() - startMs
-      const progress = (elapsed % duration) / duration
-      const currentTime = minT + progress * (maxT - minT)
-      setTripTime(currentTime)
-      tripAnimRef.current = requestAnimationFrame(animate)
-    }
-    tripAnimRef.current = requestAnimationFrame(animate)
-
-    return () => {
-      if (tripAnimRef.current) {
-        cancelAnimationFrame(tripAnimRef.current)
-        tripAnimRef.current = null
-      }
-    }
-  }, [tripData])
 
   // Route hover/click handlers
   const onRouteHover = useCallback((info: PickingInfo) => {
@@ -217,21 +160,8 @@ export default function Map() {
     setRouteRevision((r) => r + 1)
   }, [])
 
-  // Standard layer hover
-  const onHover = useCallback((info: PickingInfo) => {
-    if (info.object) {
-      const record = info.object as DeliveryRecord
-      const dist = calcDistance(record.shop_lat, record.shop_lon, record.dlvry_lat, record.dlvry_lon)
-      const dur = calcDuration(record.pick_up_date, record.hand_over_date)
-      setTooltip({
-        x: info.x,
-        y: info.y,
-        text: `🛵 ${record.ord_no} | ${dist.toFixed(2)}km${dur ? ` | ${dur}분` : ''}`,
-      })
-    } else {
-      setTooltip(null)
-    }
-  }, [])
+  // Standard layer hover — 비활성 (Route만 사용)
+  const onHover = useCallback((_info: PickingInfo) => {}, [])
 
   // Initialize map
   useEffect(() => {
@@ -294,39 +224,18 @@ export default function Map() {
 
     const deckLayers: Layer[] = []
 
-    if (layers.point && filteredData.length > 0) {
-      deckLayers.push(...createPointLayers(filteredData))
-    }
-    if (layers.arc && filteredData.length > 0) {
-      deckLayers.push(createArcLayer(filteredData))
-    }
-    if (layers.heatmap && filteredData.length > 0) {
-      deckLayers.push(createHeatmapLayer(filteredData, layerSettings.heatmap))
-    }
-    if (layers.hexbin && filteredData.length > 0) {
-      deckLayers.push(createHexbinLayer(filteredData, layerSettings.hexbin))
-    }
-    if (layers.cluster && filteredData.length > 0) {
-      deckLayers.push(...createClusterLayers(filteredData, layerSettings.cluster))
-    }
-
-    // Route layers
+    // Route layers (실시간 모드 핵심)
     if (layers.route && routeEngineRef.current) {
       deckLayers.push(...routeEngineRef.current.createLayers(onRouteHover, onRouteClick))
     }
 
-    // Trip layer
-    if (layers.trip && tripData.length > 0) {
-      deckLayers.push(createTripLayer(tripData, tripTime))
-    }
-
     overlayRef.current.setProps({
       layers: deckLayers,
-      onHover: layers.route ? undefined : onHover,
+      onHover: undefined,
     })
-  }, [filteredData, layers, layerSettings, onHover, onRouteHover, onRouteClick, routeRevision, tripData, tripTime])
+  }, [layers, onRouteHover, onRouteClick, routeRevision])
 
-  const showPlaybar = layers.route && routeEngineRef.current?.hasData()
+  const showPlaybar = false // 실시간 모드에서는 Playbar 비활성
 
   const flyToPreset = useCallback((pitch: number, bearing: number) => {
     if (!mapRef.current) return
