@@ -43,7 +43,6 @@ OUTPUT_FILE = OUTPUT_DIR / "realtime.json"
 QUERY_TEMPLATE = """
 SELECT
     ord_no,
-    event,
     CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) AS shop_lat,
     CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) AS shop_lon,
     CAST(json_extract_scalar(details, '$.customerLocation.latitude') AS DOUBLE) AS dlvry_lat,
@@ -52,13 +51,15 @@ SELECT
     CAST(json_extract_scalar(details, '$.expectedDeliveryTime') AS INTEGER) AS expected_min,
     json_extract_scalar(details, '$.isSingle') AS is_single,
     json_extract_scalar(details, '$.agencyId') AS agency_id,
-    log_ts
+    CAST(json_extract_scalar(details, '$.expectedPickupDate') AS BIGINT) AS pickup_ts_ms,
+    log_ts AS completed_ts
 FROM raw_log.serverlog_delivery_status_change
 WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{minutes}' MINUTE) AT TIME ZONE 'Asia/Seoul'
                  AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
   AND event = 'DELIVERY_COMPLETED'
   AND json_extract_scalar(details, '$.shopLocation.latitude') IS NOT NULL
   AND json_extract_scalar(details, '$.customerLocation.latitude') IS NOT NULL
+  AND json_extract_scalar(details, '$.expectedPickupDate') IS NOT NULL
 LIMIT {limit}
 """
 
@@ -108,7 +109,8 @@ def save_json(data: list[dict]):
                 "expected_min": d["expected_min"],
                 "is_single": d["is_single"] == "true",
                 "agency_id": d["agency_id"],
-                "log_ts": str(d["log_ts"]),
+                "pickup_ts_ms": d["pickup_ts_ms"],
+                "completed_ts": str(d["completed_ts"]),
             }
             for d in data
             if d["shop_lat"] and d["dlvry_lat"]
@@ -142,7 +144,9 @@ def main():
     parser.add_argument(
         "--interval", type=int, default=300, help="폴링 간격 (초, 기본 300)"
     )
-    parser.add_argument("--minutes", type=int, default=5, help="조회 범위 (분, 기본 5)")
+    parser.add_argument(
+        "--minutes", type=int, default=60, help="조회 범위 (분, 기본 60)"
+    )
     parser.add_argument("--limit", type=int, default=5000, help="최대 건수 (기본 5000)")
     args = parser.parse_args()
 
