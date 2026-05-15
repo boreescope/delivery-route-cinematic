@@ -118,7 +118,7 @@ export class RouteAnimationEngine {
           pickupMs,
           completedMs,
           route,
-          osrmDurationMs: route.duration * 1000, // OSRM 예상 이동 시간 (초→ms)
+          osrmDurationMs: route.duration * 1000 * 3, // OSRM(차) × 3 = 실제 바이크 배달 (데이터 기반)
           color: randColor(),
           startedAt: pickupMs, // 픽업 시각부터 시작
         }
