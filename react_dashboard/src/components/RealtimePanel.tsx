@@ -29,8 +29,8 @@ export default function RealtimePanel() {
           shop_lon: d.shop_lon as number,
           dlvry_lat: d.dlvry_lat as number,
           dlvry_lon: d.dlvry_lon as number,
-          pick_up_date: (d.pickup_ts as string) || '',
-          hand_over_date: (d.completed_ts as string) || '',
+          pick_up_date: String(d.pickup_ms || ''),
+          hand_over_date: String(d.completed_ms || ''),
         }))
         setData(records)
       }

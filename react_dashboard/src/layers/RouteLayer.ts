@@ -115,8 +115,14 @@ export class RouteAnimationEngine {
     const gen = this._generationId
     const now = Date.now()
 
-    // 시간 필터 없이 전부 그림 (최대 300건, 성능 제한)
-    const filtered = records.filter((r) => !!r.pick_up_date && !!r.hand_over_date).slice(0, 300)
+    // 시간 필터: 최근 5분간 픽업된 건만 (epoch ms 비교)
+    const fiveMinAgo = now - 5 * 60 * 1000
+
+    const filtered = records.filter((r) => {
+      if (!r.pick_up_date || !r.hand_over_date) return false
+      const pickupMs = Number(r.pick_up_date)
+      return !isNaN(pickupMs) && pickupMs >= fiveMinAgo
+    }).slice(0, 500)
 
     // Concurrent fetch (3 workers)
     const queue = filtered.map((r, i) => ({ record: r, index: i }))
@@ -145,9 +151,9 @@ export class RouteAnimationEngine {
     rt.coords[0] = [record.shop_lat, record.shop_lon]
     rt.coords[rt.coords.length - 1] = [record.dlvry_lat, record.dlvry_lon]
 
-    // 실제 이동 시간 계산 (UTC +00:00 → 그대로 파싱)
-    const pickupMs = new Date(record.pick_up_date.replace(' ', 'T')).getTime()
-    const handoverMs = new Date(record.hand_over_date.replace(' ', 'T')).getTime()
+    // 실제 이동 시간 계산 (epoch ms 직접 사용)
+    const pickupMs = Number(record.pick_up_date)
+    const handoverMs = Number(record.hand_over_date)
     const totalDurationMs = Math.max(handoverMs - pickupMs, 60000)
 
     // 현재 진행률
@@ -161,11 +167,7 @@ export class RouteAnimationEngine {
     const durText = mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`
     const tip = `#${index + 1} ${Math.round(rt.dist)}m / ${durText}`
 
-    if (progress >= 1) {
-      // 완료된 건도 10초 애니메이션으로 그림
-      await this._animateRoute(rt.coords, color, 10000, gid, tip, gen)
-      return
-    }
+    if (progress >= 1) return // 이미 끝남 → 스킵
 
     // 남은 시간 (실제 1:1)
     const remainingMs = totalDurationMs - elapsed
