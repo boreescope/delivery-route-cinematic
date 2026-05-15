@@ -108,7 +108,7 @@ export default function RealtimePanel() {
   const mm = Math.floor(displayCountdown / 60)
   const ss = displayCountdown % 60
   const now = new Date()
-  const delayed = new Date(now.getTime() - 5 * 60 * 1000)
+  const delayed = new Date(now.getTime() - 1 * 60 * 1000)
   const clock = `${String(delayed.getHours()).padStart(2, '0')}:${String(delayed.getMinutes()).padStart(2, '0')}:${String(delayed.getSeconds()).padStart(2, '0')}`
 
   return (
@@ -117,7 +117,7 @@ export default function RealtimePanel() {
       <div className="text-center">
         <div className="text-2xl font-bold text-foreground tabular-nums">{clock}</div>
         <div className="text-[10px] text-muted-foreground">
-          데이터 시각 <span className="text-muted-foreground/60 ml-1">(5분 지연)</span>
+          데이터 시각 <span className="text-muted-foreground/60 ml-1">(~1분 지연)</span>
         </div>
       </div>
 
