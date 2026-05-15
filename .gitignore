@@ -8,3 +8,4 @@ ref_gen.tmp
 .env
 osrm/*.osm.pbf
 osrm/*.osrm*
+*.csv

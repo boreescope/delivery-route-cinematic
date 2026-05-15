@@ -1,24 +1,3 @@
 {
-  "mcpServers": {
-    "trino": {
-      "command": "/Users/jinsol/Desktop/Codes/.venv/bin/python",
-      "args": [
-        "/Users/jinsol/Documents/리서치_260410_배달동선/mcp_trino_server.py"
-      ],
-      "env": {
-        "TRINO_HOST": "trino-auth.emr.ds.woowa.in",
-        "TRINO_PORT": "443",
-        "TRINO_CATALOG": "hive_zeppelin",
-        "TRINO_SCHEMA": "sbbi",
-        "TRINO_PROTOCOL": "https"
-      },
-      "disabled": false,
-      "autoApprove": [
-        "query",
-        "show_tables",
-        "describe_table",
-        "show_schemas"
-      ]
-    }
-  }
+  "mcpServers": {}
 }

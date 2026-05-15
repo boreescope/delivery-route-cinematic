@@ -7,9 +7,8 @@
     df = client.query_delivery(date="2026-05-15", region="11680", hours=(11, 14), limit=500)
 """
 
-import csv
 import os
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
