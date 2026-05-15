@@ -164,15 +164,59 @@ class Handler(BaseHTTPRequestHandler):
             }
             self.wfile.write(json.dumps(status).encode())
 
-        else:
-            self.send_response(404)
+        elif path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
             self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+
+        else:
+            # 정적 파일 서빙 (React 빌드 결과물)
+            self._serve_static(path)
 
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.end_headers()
+
+    def _serve_static(self, path: str):
+        """React 빌드 결과물 서빙 (SPA fallback 포함)"""
+        static_dir = Path(__file__).parent / "static"
+        if path == "/":
+            path = "/index.html"
+        file_path = static_dir / path.lstrip("/")
+
+        # SPA fallback: 파일 없으면 index.html
+        if not file_path.exists() or not file_path.is_file():
+            file_path = static_dir / "index.html"
+
+        if not file_path.exists():
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        # MIME type
+        ext = file_path.suffix.lower()
+        mime_map = {
+            ".html": "text/html",
+            ".js": "application/javascript",
+            ".css": "text/css",
+            ".json": "application/json",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".svg": "image/svg+xml",
+            ".ico": "image/x-icon",
+            ".woff2": "font/woff2",
+            ".woff": "font/woff",
+            ".ttf": "font/ttf",
+        }
+        content_type = mime_map.get(ext, "application/octet-stream")
+
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.end_headers()
+        self.wfile.write(file_path.read_bytes())
 
     def log_message(self, format, *args):
         kst = timezone(timedelta(hours=9))
