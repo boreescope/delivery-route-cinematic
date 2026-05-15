@@ -115,13 +115,13 @@ export class RouteAnimationEngine {
     const gen = this._generationId
     const now = Date.now()
 
-    // 시간 필터: 최근 5분간 픽업된 건만 (epoch ms 비교)
-    const fiveMinAgo = now - 5 * 60 * 1000
+    // 시간 필터: 최근 15분간 픽업된 건 (epoch ms 비교)
+    const cutoff = now - 5 * 60 * 1000
 
     const filtered = records.filter((r) => {
       if (!r.pick_up_date || !r.hand_over_date) return false
       const pickupMs = Number(r.pick_up_date)
-      return !isNaN(pickupMs) && pickupMs >= fiveMinAgo
+      return !isNaN(pickupMs) && pickupMs >= cutoff
     }).slice(0, 500)
 
     // Concurrent fetch (3 workers)
