@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "작업 완료 알림",
+  "description": "에이전트 작업 완료 시 알림음 재생",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "afplay /System/Library/Sounds/Glass.aiff"
+  }
+}
