@@ -86,8 +86,8 @@ const defaultSettings: LayerSettings = { opacity: 0.8, radius: 40 }
 export const useStore = create<AppState>((set, get) => ({
   data: [],
   layers: {
-    point: true,
-    arc: true,
+    point: false,
+    arc: false,
     heatmap: false,
     hexbin: false,
     cluster: false,
