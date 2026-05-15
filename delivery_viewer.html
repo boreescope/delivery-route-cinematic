@@ -114,6 +114,10 @@
     <div class="rt-dot" id="rt-dot"></div>
     <span class="rt-title">실시간 모드</span>
   </div>
+  <div style="text-align:center;margin:8px 0 4px">
+    <div id="rt-clock" style="font-size:28px;font-weight:800;color:#333;font-variant-numeric:tabular-nums;letter-spacing:-1px">--:--</div>
+    <div style="font-size:10px;color:#999">현재 시각 <span style="color:#bbb;margin-left:4px">~5분 지연</span></div>
+  </div>
   <div class="rt-row"><span>배달 건수</span><span class="val" id="rt-count">—</span></div>
   <div class="rt-row"><span>폴링 간격</span><span class="val" id="rt-interval">5분</span></div>
   <div class="rt-row"><span>지역</span>
@@ -1033,6 +1037,9 @@ function updateTimerDisplay(){
   const m=Math.floor(_rtCountdown/60);
   const s=_rtCountdown%60;
   document.getElementById('rt-timer').textContent=m+':'+String(s).padStart(2,'0');
+  // 현재 시각 업데이트
+  const now=new Date();
+  document.getElementById('rt-clock').textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
 }
 
 async function fetchRealtimeData(){
@@ -1111,25 +1118,23 @@ async function renderRealtimeData(deliveries){
       fitted=true;
     }
 
-    // 실제 시간 계산
-    const pickupMs=d.pickup_ts_ms||now;
-    // completed_ts는 "2026-05-15 09:07:34.282000+00:00" 형식 → KST로 파싱
-    // log_ts는 실제로 KST인데 +00:00으로 표기됨 → 그대로 epoch 변환
-    let completedMs=now;
-    if(d.completed_ts){
-      const ct=new Date(d.completed_ts.replace('+00:00','+09:00'));
-      if(!isNaN(ct)) completedMs=ct.getTime();
+    // 실제 시간 계산 (actual_seconds = 픽업~완료 실제 이동 시간)
+    const totalDuration=(d.actual_seconds||600)*1000; // ms
+
+    // pickup_ts 파싱 (KST인데 +00:00 표기)
+    let startMs=now-totalDuration;
+    if(d.pickup_ts){
+      const raw=d.pickup_ts.split('+')[0].split('.')[0].replace(' ','T');
+      const pt=new Date(raw+'+09:00');
+      if(!isNaN(pt)) startMs=pt.getTime();
     }
-    const totalDuration=Math.max(completedMs-pickupMs,60000); // 최소 1분
 
     // 현재 시각 기준 진행률
-    const elapsed=now-pickupMs;
+    const elapsed=now-startMs;
     const progress=Math.min(Math.max(elapsed/totalDuration,0),1);
 
-    // 애니메이션: 남은 시간만큼 실제 시간으로 그림
-    const remainingMs=Math.max(totalDuration-elapsed,0);
-    // 이미 완료된 건은 빠르게 (3초), 진행 중인 건은 남은 시간 그대로
-    const animDur=progress>=1?3000:Math.max(remainingMs,3000);
+    // 애니메이션: 실제 시간 그대로 (1초 = 1초)
+    const animDur=Math.max(totalDuration,10000); // 실제 배달 시간 그대로 (ms)
 
     const color=getThemeColor(i,total);
     const gid='rt_'+d.ord_no;

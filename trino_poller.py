@@ -41,27 +41,39 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_FILE = OUTPUT_DIR / "realtime.json"
 
 QUERY_TEMPLATE = """
-SELECT
-    ord_no,
+WITH completed AS (
+  SELECT ord_no, log_ts AS completed_ts,
     CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) AS shop_lat,
     CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) AS shop_lon,
     CAST(json_extract_scalar(details, '$.customerLocation.latitude') AS DOUBLE) AS dlvry_lat,
     CAST(json_extract_scalar(details, '$.customerLocation.longitude') AS DOUBLE) AS dlvry_lon,
     json_extract_scalar(details, '$.deliveryMethod') AS delivery_method,
-    CAST(json_extract_scalar(details, '$.expectedDeliveryTime') AS INTEGER) AS expected_min,
     json_extract_scalar(details, '$.isSingle') AS is_single,
-    json_extract_scalar(details, '$.agencyId') AS agency_id,
-    CAST(json_extract_scalar(details, '$.expectedPickupDate') AS BIGINT) AS pickup_ts_ms,
-    log_ts AS completed_ts
-FROM raw_log.serverlog_delivery_status_change
-WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{minutes}' MINUTE) AT TIME ZONE 'Asia/Seoul'
-                 AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
-  AND event = 'DELIVERY_COMPLETED'
-  AND json_extract_scalar(details, '$.shopLocation.latitude') IS NOT NULL
-  AND json_extract_scalar(details, '$.customerLocation.latitude') IS NOT NULL
-  AND json_extract_scalar(details, '$.expectedPickupDate') IS NOT NULL
-  AND CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) BETWEEN 37.42 AND 37.70
-  AND CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) BETWEEN 126.76 AND 127.18
+    json_extract_scalar(details, '$.agencyId') AS agency_id
+  FROM raw_log.serverlog_delivery_status_change
+  WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{minutes}' MINUTE) AT TIME ZONE 'Asia/Seoul'
+                   AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
+    AND event = 'DELIVERY_COMPLETED'
+    AND json_extract_scalar(details, '$.shopLocation.latitude') IS NOT NULL
+    AND json_extract_scalar(details, '$.customerLocation.latitude') IS NOT NULL
+    AND CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) BETWEEN 37.42 AND 37.70
+    AND CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) BETWEEN 126.76 AND 127.18
+),
+pickup AS (
+  SELECT ord_no, MAX(log_ts) AS pickup_ts
+  FROM raw_log.serverlog_delivery_status_change
+  WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{pickup_range}' MINUTE) AT TIME ZONE 'Asia/Seoul'
+                   AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
+    AND event = 'PICKUP_COMPLETED'
+  GROUP BY ord_no
+)
+SELECT c.ord_no, c.shop_lat, c.shop_lon, c.dlvry_lat, c.dlvry_lon,
+       c.delivery_method, c.is_single, c.agency_id,
+       p.pickup_ts, c.completed_ts,
+       DATE_DIFF('second', p.pickup_ts, c.completed_ts) AS actual_seconds
+FROM completed c
+JOIN pickup p ON c.ord_no = p.ord_no
+WHERE DATE_DIFF('second', p.pickup_ts, c.completed_ts) BETWEEN 60 AND 7200
 LIMIT {limit}
 """
 
@@ -78,12 +90,17 @@ def get_connection():
     )
 
 
-def fetch_realtime(minutes: int = 5, limit: int = 5000) -> list[dict]:
-    """최근 N분간 완료된 배달 데이터 조회"""
+def fetch_realtime(minutes: int = 60, limit: int = 100000) -> list[dict]:
+    """최근 N분간 완료된 배달 데이터 조회 (픽업~완료 실제 시간 포함)"""
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute(QUERY_TEMPLATE.format(minutes=minutes, limit=limit))
+        pickup_range = minutes + 60  # 픽업은 완료보다 최대 1시간 전
+        cur.execute(
+            QUERY_TEMPLATE.format(
+                minutes=minutes, pickup_range=pickup_range, limit=limit
+            )
+        )
         columns = [desc[0] for desc in cur.description]
         rows = cur.fetchall()
         return [dict(zip(columns, row)) for row in rows]
@@ -108,14 +125,14 @@ def save_json(data: list[dict]):
                 "dlvry_lat": d["dlvry_lat"],
                 "dlvry_lon": d["dlvry_lon"],
                 "delivery_method": d["delivery_method"],
-                "expected_min": d["expected_min"],
                 "is_single": d["is_single"] == "true",
                 "agency_id": d["agency_id"],
-                "pickup_ts_ms": d["pickup_ts_ms"],
+                "pickup_ts": str(d["pickup_ts"]),
                 "completed_ts": str(d["completed_ts"]),
+                "actual_seconds": d["actual_seconds"],
             }
             for d in data
-            if d["shop_lat"] and d["dlvry_lat"]
+            if d["shop_lat"] and d["dlvry_lat"] and d["actual_seconds"]
         ],
     }
 
