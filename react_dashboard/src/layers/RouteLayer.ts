@@ -43,6 +43,10 @@ interface Job {
   osrmDurationMs: number // OSRM 예상 이동 시간
   color: [number, number, number]
   startedAt: number // 애니메이션 시작 시각 (Date.now 기준)
+  // scale 전환용
+  scaleAnchorProgress: number // scale 변경 시점의 progress (0~1)
+  scaleAnchorTime: number // scale 변경 시점의 Date.now()
+  scaledRemainingMs: number // 남은 구간에 할당된 시간
 }
 
 export class RouteAnimationEngine {
@@ -87,7 +91,13 @@ export class RouteAnimationEngine {
         // 기존 job — completed 업데이트
         const job = this.jobs.get(r.ord_no)!
         if (completedMs && !job.completedMs) {
+          // scale 전환: 현재 위치 고정, 남은 구간만 조정
+          const now = Date.now()
+          const currentProgress = this._getProgress(job, now)
           job.completedMs = completedMs
+          job.scaleAnchorProgress = currentProgress
+          job.scaleAnchorTime = now
+          job.scaledRemainingMs = Math.max(completedMs - now, 500) // 남은 시간 (최소 0.5초)
         }
       } else {
         // 신규 job
@@ -139,6 +149,9 @@ export class RouteAnimationEngine {
       osrmDurationMs: route.duration * 1000 * 3,
       color: randColor(),
       startedAt: Date.now(),
+      scaleAnchorProgress: 0,
+      scaleAnchorTime: Date.now(),
+      scaledRemainingMs: route.duration * 1000 * 3,
     }
     this.jobs.set(record.ord_no, job)
 
@@ -173,22 +186,19 @@ export class RouteAnimationEngine {
   }
 
   private _getProgress(job: Job, now: number): number {
-    const elapsed = now - job.startedAt
-    let totalDuration = job.osrmDurationMs
-
-    // 완료된 건이면: 남은 경로를 실제 완료 시각에 맞게 조정
-    if (job.completedMs) {
-      const remainingTime = job.completedMs - job.startedAt
-      if (remainingTime > 0) {
-        totalDuration = remainingTime
-      } else {
-        // 이미 완료된 건이 뒤늦게 추가됨 → 즉시 완료
-        return 1
-      }
+    if (job.scaleAnchorProgress > 0) {
+      // scale 전환됨: anchor 이후 남은 구간만 진행
+      const elapsedSinceAnchor = now - job.scaleAnchorTime
+      const remainingProgress = 1 - job.scaleAnchorProgress
+      if (job.scaledRemainingMs <= 0) return 1
+      const additionalProgress = remainingProgress * (elapsedSinceAnchor / job.scaledRemainingMs)
+      return Math.min(job.scaleAnchorProgress + additionalProgress, 1)
     }
 
-    if (totalDuration <= 0) return 1
-    return Math.min(elapsed / totalDuration, 1)
+    // 기본: startedAt부터 osrmDurationMs 동안 0→1
+    const elapsed = now - job.startedAt
+    if (job.osrmDurationMs <= 0) return 1
+    return Math.min(elapsed / job.osrmDurationMs, 1)
   }
 
   /** deck.gl 레이어 생성 */
