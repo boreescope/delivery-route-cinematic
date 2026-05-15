@@ -115,14 +115,13 @@ export class RouteAnimationEngine {
     const gen = this._generationId
     const now = Date.now()
 
-    // 최근 5분간 픽업된 건만 (= 현재 진행 중이거나 방금 끝난 것)
+    // 디버그 완료 — 최근 5분간 픽업된 건만 필터
     const fiveMinAgo = now - 5 * 60 * 1000
 
     const filtered = records.filter((r) => {
       if (!r.pick_up_date || !r.hand_over_date) return false
-      const pickupStr = r.pick_up_date.split('+')[0].split('.')[0].replace(' ', 'T') + '+09:00'
-      const pickupMs = new Date(pickupStr).getTime()
-      return pickupMs >= fiveMinAgo
+      const pickupMs = new Date(r.pick_up_date.replace(' ', 'T')).getTime()
+      return !isNaN(pickupMs) && pickupMs >= fiveMinAgo
     })
 
     // Concurrent fetch (3 workers)
@@ -152,11 +151,9 @@ export class RouteAnimationEngine {
     rt.coords[0] = [record.shop_lat, record.shop_lon]
     rt.coords[rt.coords.length - 1] = [record.dlvry_lat, record.dlvry_lon]
 
-    // 실제 이동 시간 계산
-    const pickupStr = record.pick_up_date.split('+')[0].split('.')[0].replace(' ', 'T') + '+09:00'
-    const handoverStr = record.hand_over_date.split('+')[0].split('.')[0].replace(' ', 'T') + '+09:00'
-    const pickupMs = new Date(pickupStr).getTime()
-    const handoverMs = new Date(handoverStr).getTime()
+    // 실제 이동 시간 계산 (UTC +00:00 → 그대로 파싱)
+    const pickupMs = new Date(record.pick_up_date.replace(' ', 'T')).getTime()
+    const handoverMs = new Date(record.hand_over_date.replace(' ', 'T')).getTime()
     const totalDurationMs = Math.max(handoverMs - pickupMs, 60000)
 
     // 현재 진행률
@@ -164,16 +161,16 @@ export class RouteAnimationEngine {
     const elapsed = now - pickupMs
     const progress = Math.min(Math.max(elapsed / totalDurationMs, 0), 1)
 
-    if (progress >= 1) return // 이미 끝남 → 스킵
-
-    // 남은 시간 (실제 1:1)
-    const remainingMs = totalDurationMs - elapsed
-
     const color = randColor()
     const gid = `g${index}`
     const mins = Math.round(totalDurationMs / 60000)
     const durText = mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`
     const tip = `#${index + 1} ${Math.round(rt.dist)}m / ${durText}`
+
+    if (progress >= 1) return // 이미 끝남 → 스킵
+
+    // 남은 시간 (실제 1:1)
+    const remainingMs = totalDurationMs - elapsed
 
     if (progress > 0) {
       // 진행 중: 이미 지나간 부분 즉시 그리고, 나머지 실시간 애니메이션
