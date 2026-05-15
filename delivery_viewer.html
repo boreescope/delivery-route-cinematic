@@ -208,7 +208,7 @@ new L.Control.MiniMap(miniTile,{toggleDisplay:true,minimized:false,position:'bot
   const overlay=document.getElementById('loading-overlay');
   for(let i=0;i<30;i++){
     try{
-      const r=await fetch('https://solebal.synology.me:5052/route/v1/driving/127.1,37.5;127.2,37.5?overview=false');
+      const r=await fetch('http://localhost:5001/route/v1/driving/127.1,37.5;127.2,37.5?overview=false');
       const j=await r.json();
       if(j.code==='Ok'){overlay.classList.add('hidden');return;}
     }catch(e){}
@@ -291,7 +291,7 @@ async function getRoute(slat,slon,dlat,dlon){
   if(routeCache[key]) return JSON.parse(JSON.stringify(routeCache[key]));
   for(let attempt=0;attempt<3;attempt++){
     try{
-      const r=await fetch('https://solebal.synology.me:5052/route/v1/driving/'+slon+','+slat+';'+dlon+','+dlat+'?overview=full&geometries=polyline');
+      const r=await fetch('http://localhost:5001/route/v1/driving/'+slon+','+slat+';'+dlon+','+dlat+'?overview=full&geometries=polyline');
       const j=await r.json();
       if(j.code==='Ok'){
         const result={coords:polyline.decode(j.routes[0].geometry).map(c=>[c[0],c[1]]),dist:j.routes[0].distance};

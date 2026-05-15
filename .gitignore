@@ -6,3 +6,5 @@ node_modules/
 ref_gen.tmp
 .history/
 .env
+osrm/*.osm.pbf
+osrm/*.osrm*

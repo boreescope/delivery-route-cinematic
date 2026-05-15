@@ -1,6 +1,6 @@
 import polyline from '@mapbox/polyline'
 
-const OSRM_BASE = 'https://solebal.synology.me:5052/route/v1/driving'
+const OSRM_BASE = 'http://localhost:5001/route/v1/driving'
 
 export interface RouteResult {
   coords: [number, number][] // [lat, lon][]
