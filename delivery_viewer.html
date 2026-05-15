@@ -13,7 +13,7 @@
   #file{margin-bottom:8px}
   #status{font-size:13px;color:#666;margin-top:8px}
   #count{font-size:12px;color:#999;margin-top:4px}
-  #qbtn{position:absolute;top:60px;right:16px;z-index:1000;background:#fff;border:none;padding:10px 16px;
+  #qbtn{position:absolute;top:16px;right:16px;z-index:1000;background:#fff;border:none;padding:10px 16px;
     border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);cursor:pointer;font-size:14px;font-family:inherit}
   #qbtn:hover{background:#f5f5f5}
   #modal-bg{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:2000;align-items:center;justify-content:center}
@@ -54,31 +54,6 @@
   #theme-panel label{display:block;margin:8px 0 4px;font-weight:500;color:#666;font-size:12px}
   #theme-panel select{width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box}
   #theme-panel.disabled{opacity:.5;pointer-events:none}
-  /* 실시간 모드 패널 */
-  #realtime-panel{position:absolute;top:16px;right:16px;z-index:1000;background:#fff;padding:14px 18px;
-    border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.15);min-width:220px;font-size:13px;display:none}
-  #realtime-panel.show{display:block}
-  #realtime-panel .rt-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-  #realtime-panel .rt-dot{width:8px;height:8px;border-radius:50%;background:#4caf50;animation:pulse 2s infinite}
-  #realtime-panel .rt-dot.paused{background:#ff9800;animation:none}
-  #realtime-panel .rt-dot.error{background:#f44336;animation:none}
-  #realtime-panel .rt-title{font-weight:600;font-size:14px;color:#333}
-  #realtime-panel .rt-row{display:flex;justify-content:space-between;align-items:center;margin:6px 0;font-size:12px;color:#666}
-  #realtime-panel .rt-row .val{font-weight:600;color:#333}
-  #realtime-panel .rt-timer{font-size:20px;font-weight:700;color:#333;text-align:center;margin:10px 0;font-variant-numeric:tabular-nums}
-  #realtime-panel .rt-updated{font-size:11px;color:#999;text-align:center;margin-top:6px}
-  #realtime-panel .rt-flash{animation:rtFlash .6s ease}
-  #realtime-panel .rt-btns{display:flex;gap:6px;margin-top:10px}
-  #realtime-panel .rt-btns button{flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;font-family:inherit}
-  #realtime-panel .rt-btns button:hover{background:#f5f5f5}
-  #realtime-panel .rt-btns button.active{background:#333;color:#fff;border-color:#333}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-  @keyframes rtFlash{0%{background:#e8f5e9}100%{background:#fff}}
-  /* 실시간 모드 토글 버튼 */
-  #rt-toggle{position:absolute;top:16px;right:16px;z-index:999;background:#333;color:#fff;border:none;padding:10px 16px;
-    border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);cursor:pointer;font-size:13px;font-family:inherit;display:flex;align-items:center;gap:6px}
-  #rt-toggle:hover{background:#555}
-  #rt-toggle .dot{width:6px;height:6px;border-radius:50%;background:#4caf50}
 </style>
 </head><body>
 <div id="loading-overlay"><div class="spinner"></div><div class="text">🛵 OSRM 라우팅 서버 연결 중...</div></div>
@@ -108,39 +83,6 @@
   </select>
 </div>
 <button id="qbtn" onclick="document.getElementById('modal-bg').classList.add('show')">📋 쿼리 생성</button>
-<button id="rt-toggle" onclick="toggleRealtime()"><span class="dot"></span> 실시간</button>
-<div id="realtime-panel">
-  <div class="rt-header">
-    <div class="rt-dot" id="rt-dot"></div>
-    <span class="rt-title">실시간 모드</span>
-  </div>
-  <div style="text-align:center;margin:8px 0 4px">
-    <div id="rt-clock" style="font-size:28px;font-weight:800;color:#333;font-variant-numeric:tabular-nums;letter-spacing:-1px">--:--</div>
-    <div style="font-size:10px;color:#999">현재 시각 <span style="color:#bbb;margin-left:4px">~5분 지연</span></div>
-  </div>
-  <div class="rt-row"><span>배달 건수</span><span class="val" id="rt-count">—</span></div>
-  <div class="rt-row"><span>폴링 간격</span><span class="val" id="rt-interval">5분</span></div>
-  <div class="rt-row"><span>지역</span>
-    <select id="rt-region" style="width:110px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px" onchange="onRegionChange()">
-      <option value="all">전국</option>
-      <option value="seoul" selected>서울</option>
-      <option value="gangnam">강남구</option>
-      <option value="songpa">송파구</option>
-      <option value="seocho">서초구</option>
-      <option value="mapo">마포구</option>
-      <option value="yeongdeungpo">영등포구</option>
-      <option value="busan">부산</option>
-      <option value="incheon">인천</option>
-      <option value="daegu">대구</option>
-    </select>
-  </div>
-  <div class="rt-timer" id="rt-timer">5:00</div>
-  <div class="rt-updated" id="rt-updated">대기 중</div>
-  <div class="rt-btns">
-    <button id="rt-btn-pause" onclick="togglePause()">⏸ 일시정지</button>
-    <button id="rt-btn-refresh" onclick="manualRefresh()">🔄 즉시 갱신</button>
-  </div>
-</div>
 <div id="modal-bg">
   <div id="modal">
     <h3>📋 배달 데이터 쿼리 생성</h3>
@@ -208,7 +150,7 @@ new L.Control.MiniMap(miniTile,{toggleDisplay:true,minimized:false,position:'bot
   const overlay=document.getElementById('loading-overlay');
   for(let i=0;i<30;i++){
     try{
-      const r=await fetch('http://localhost:5001/route/v1/driving/127.1,37.5;127.2,37.5?overview=false');
+      const r=await fetch('https://solebal.synology.me:5052/route/v1/driving/127.1,37.5;127.2,37.5?overview=false');
       const j=await r.json();
       if(j.code==='Ok'){overlay.classList.add('hidden');return;}
     }catch(e){}
@@ -291,7 +233,7 @@ async function getRoute(slat,slon,dlat,dlon){
   if(routeCache[key]) return JSON.parse(JSON.stringify(routeCache[key]));
   for(let attempt=0;attempt<3;attempt++){
     try{
-      const r=await fetch('http://localhost:5001/route/v1/driving/'+slon+','+slat+';'+dlon+','+dlat+'?overview=full&geometries=polyline');
+      const r=await fetch('https://solebal.synology.me:5052/route/v1/driving/'+slon+','+slat+';'+dlon+','+dlat+'?overview=full&geometries=polyline');
       const j=await r.json();
       if(j.code==='Ok'){
         const result={coords:polyline.decode(j.routes[0].geometry).map(c=>[c[0],c[1]]),dist:j.routes[0].distance};
@@ -923,261 +865,5 @@ document.getElementById('t-map').addEventListener('change',function(){
   map.removeLayer(currentTileLayer);
   currentTileLayer=L.tileLayer(MAP_TILES[this.value],{maxZoom:19}).addTo(map);
 });
-
-// ===== 실시간 모드 =====
-let _rtActive=false;
-let _rtPaused=false;
-let _rtTimer=null;
-let _rtCountdown=300;
-let _rtInterval=300;
-let _rtLastData=null;
-const REALTIME_JSON_URL='output/realtime.json';
-
-// 지역 좌표 범위 (lat_min, lat_max, lon_min, lon_max)
-const REGION_BOUNDS={
-  all:[33,39,124,132],
-  seoul:[37.42,37.70,126.76,127.18],
-  gangnam:[37.47,37.53,127.01,127.09],
-  songpa:[37.49,37.53,127.08,127.15],
-  seocho:[37.46,37.51,126.97,127.06],
-  mapo:[37.53,37.58,126.89,126.96],
-  yeongdeungpo:[37.50,37.55,126.88,126.93],
-  busan:[35.05,35.25,128.90,129.25],
-  incheon:[37.35,37.60,126.55,126.80],
-  daegu:[35.80,35.95,128.50,128.75]
-};
-
-function getRegionFilter(){
-  return REGION_BOUNDS[document.getElementById('rt-region').value]||REGION_BOUNDS.all;
-}
-
-function filterByRegion(deliveries){
-  const[latMin,latMax,lonMin,lonMax]=getRegionFilter();
-  return deliveries.filter(d=>
-    d.shop_lat>=latMin&&d.shop_lat<=latMax&&
-    d.shop_lon>=lonMin&&d.shop_lon<=lonMax
-  );
-}
-
-function onRegionChange(){
-  // 지역 변경 시 즉시 재렌더링 (마지막 데이터 기준)
-  if(_rtLastData&&_rtLastData.deliveries){
-    const filtered=filterByRegion(_rtLastData.deliveries);
-    document.getElementById('rt-count').textContent=filtered.length.toLocaleString()+'건';
-    renderRealtimeData(filtered);
-    // 지역에 맞게 지도 이동
-    const bounds=getRegionFilter();
-    map.fitBounds([[bounds[0],bounds[2]],[bounds[1],bounds[3]]],{padding:[60,60]});
-  }
-}
-
-function toggleRealtime(){
-  _rtActive=!_rtActive;
-  const panel=document.getElementById('realtime-panel');
-  const toggle=document.getElementById('rt-toggle');
-  const qbtn=document.getElementById('qbtn');
-  if(_rtActive){
-    panel.classList.add('show');
-    toggle.style.display='none';
-    qbtn.style.display='none';
-    startRealtimePolling();
-  }else{
-    panel.classList.remove('show');
-    toggle.style.display='flex';
-    qbtn.style.display='block';
-    stopRealtimePolling();
-  }
-}
-
-function startRealtimePolling(){
-  _rtPaused=false;
-  _rtCountdown=0;
-  updateTimerDisplay();
-  if(_rtTimer) clearInterval(_rtTimer);
-  _rtTimer=setInterval(tickRealtime,1000);
-  tickRealtime();
-}
-
-function stopRealtimePolling(){
-  if(_rtTimer){clearInterval(_rtTimer);_rtTimer=null;}
-  document.getElementById('rt-dot').className='rt-dot paused';
-  document.getElementById('rt-updated').textContent='중지됨';
-}
-
-function togglePause(){
-  _rtPaused=!_rtPaused;
-  const btn=document.getElementById('rt-btn-pause');
-  const dot=document.getElementById('rt-dot');
-  if(_rtPaused){
-    btn.textContent='▶ 재개';
-    dot.className='rt-dot paused';
-  }else{
-    btn.textContent='⏸ 일시정지';
-    dot.className='rt-dot';
-  }
-}
-
-function manualRefresh(){
-  _rtCountdown=0;
-  tickRealtime();
-}
-
-function tickRealtime(){
-  if(_rtPaused) return;
-  if(_rtCountdown<=0){
-    _rtCountdown=_rtInterval;
-    fetchRealtimeData();
-  }else{
-    _rtCountdown--;
-  }
-  updateTimerDisplay();
-}
-
-function updateTimerDisplay(){
-  const m=Math.floor(_rtCountdown/60);
-  const s=_rtCountdown%60;
-  document.getElementById('rt-timer').textContent=m+':'+String(s).padStart(2,'0');
-  // 현재 시각 업데이트
-  const now=new Date();
-  document.getElementById('rt-clock').textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-}
-
-async function fetchRealtimeData(){
-  const dot=document.getElementById('rt-dot');
-  const updated=document.getElementById('rt-updated');
-  try{
-    const resp=await fetch(REALTIME_JSON_URL+'?t='+Date.now());
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const data=await resp.json();
-    const isNew=!_rtLastData||_rtLastData.updated_at!==data.updated_at;
-    _rtLastData=data;
-    document.getElementById('rt-count').textContent=data.count.toLocaleString()+'건';
-    const updTime=new Date(data.updated_at);
-    updated.textContent='마지막 갱신: '+updTime.toLocaleTimeString('ko-KR');
-    dot.className='rt-dot';
-    if(isNew&&data.deliveries&&data.deliveries.length>0){
-      const filtered=filterByRegion(data.deliveries);
-      document.getElementById('rt-count').textContent=filtered.length.toLocaleString()+'건';
-      const panel=document.getElementById('realtime-panel');
-      panel.classList.remove('rt-flash');
-      void panel.offsetWidth;
-      panel.classList.add('rt-flash');
-      showToast('🔄 '+filtered.length+'건 업데이트');
-      renderRealtimeData(filtered);
-    }
-  }catch(e){
-    dot.className='rt-dot error';
-    updated.textContent='❌ 연결 실패: '+e.message;
-  }
-}
-
-function showToast(msg){
-  const t=document.getElementById('toast');
-  t.textContent=msg;
-  t.style.display='block';
-  setTimeout(()=>{t.style.display='none';},2500);
-}
-
-async function renderRealtimeData(deliveries){
-  _generationId++;
-  pathData=[];dotData=[];endpointData=[];
-  hoveredGroupId=null;clickedGroupId=null;
-  routeMetadata={};groupOrderCounter=0;groupOrderMap={};
-  updateDeckLayers();
-
-  // 이미 그린 주문 추적
-  const drawn=new Set();
-  const now=Date.now();
-  const total=deliveries.length;
-  statusEl.textContent='실시간: '+total+'건 렌더링 중...';
-  countEl.textContent='';
-
-  // 시간순 정렬 (픽업 시각 기준)
-  deliveries.sort((a,b)=>(a.pickup_ts_ms||0)-(b.pickup_ts_ms||0));
-
-  let done=0,fitted=false;
-  const gen=_generationId;
-
-  async function fetchAndDraw(d,i){
-    if(gen!==_generationId) return;
-    if(drawn.has(d.ord_no)) return;
-    drawn.add(d.ord_no);
-
-    const slat=d.shop_lat,slon=d.shop_lon,dlat=d.dlvry_lat,dlon=d.dlvry_lon;
-    if(!slat||!dlat) return;
-    const rt=await getRoute(slat,slon,dlat,dlon);
-    if(!rt){done++;countEl.textContent=done+'/'+total;if(done===total)statusEl.textContent='실시간: '+total+'건 완료';return;}
-    rt.coords[0]=[slat,slon];rt.coords[rt.coords.length-1]=[dlat,dlon];
-    if(!fitted){
-      // 최초 1회만 지역 범위로 이동 (이후 업데이트에서는 위치 유지)
-      if(!window._rtFittedOnce){
-        const bounds=getRegionFilter();
-        map.fitBounds([[bounds[0],bounds[2]],[bounds[1],bounds[3]]],{padding:[60,60]});
-        window._rtFittedOnce=true;
-      }
-      fitted=true;
-    }
-
-    // 실제 시간 계산 (actual_seconds = 픽업~완료 실제 이동 시간)
-    const totalDuration=(d.actual_seconds||600)*1000; // ms
-
-    // pickup_ts 파싱 (KST인데 +00:00 표기)
-    let startMs=now-totalDuration;
-    if(d.pickup_ts){
-      const raw=d.pickup_ts.split('+')[0].split('.')[0].replace(' ','T');
-      const pt=new Date(raw+'+09:00');
-      if(!isNaN(pt)) startMs=pt.getTime();
-    }
-
-    // 현재 시각 기준 진행률
-    const elapsed=now-startMs;
-    const progress=Math.min(Math.max(elapsed/totalDuration,0),1);
-
-    // 애니메이션: 실제 시간 그대로 (1초 = 1초)
-    const animDur=Math.max(totalDuration,10000); // 실제 배달 시간 그대로 (ms)
-
-    const color=getThemeColor(i,total);
-    const gid='rt_'+d.ord_no;
-    const method=d.delivery_method||'';
-    const durMin=Math.round(totalDuration/60000);
-    const tip=method+' '+Math.round(rt.dist)+'m / '+durMin+'분'+(d.is_single?' 단건':'');
-
-    // 이미 진행된 부분은 즉시 그리기
-    if(progress>0&&progress<1){
-      const splitIdx=Math.floor(rt.coords.length*progress);
-      const doneCoords=rt.coords.slice(0,splitIdx+1);
-      const remainCoords=rt.coords.slice(splitIdx);
-      // 완료 부분 즉시 렌더
-      const rgb=hexToRgb(color);
-      const donePath=doneCoords.map(c=>[c[1],c[0]]);
-      if(donePath.length>=2){
-        pathData.push({id:gid+'_done',path:donePath,color:rgb,width:PATH_WIDTH,tipText:tip,groupId:gid});
-      }
-      endpointData.push({position:[doneCoords[0][1],doneCoords[0][0]],color:rgb,radius:ENDPOINT_RADIUS,tipText:tip,label:'가게',groupId:gid});
-      scheduleDeckUpdate();
-      // 나머지 애니메이션
-      if(remainCoords.length>=2){
-        animateRouteInternal(remainCoords,color,animDur,gid+'_rem',tip);
-      }
-    }else if(progress>=1){
-      // 이미 완료 → 빠르게 전체 그리기
-      animateRouteInternal(rt.coords,color,animDur,gid,tip);
-    }else{
-      // 아직 시작 안 함 (거의 없겠지만)
-      animateRouteInternal(rt.coords,color,animDur,gid,tip);
-    }
-
-    done++;countEl.textContent=done+'/'+total;
-    if(done===total) statusEl.textContent='실시간: '+total+'건 완료';
-  }
-
-  const queue=[...deliveries.entries()];
-  await Promise.all(Array(Math.min(3,total)).fill(null).map(async()=>{
-    while(queue.length){
-      if(gen!==_generationId) return;
-      const[i,d]=queue.shift();await fetchAndDraw(d,i);
-    }
-  }));
-}
 </script>
 </body></html>
