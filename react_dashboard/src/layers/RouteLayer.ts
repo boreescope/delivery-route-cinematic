@@ -146,6 +146,7 @@ export class RouteAnimationEngine {
           const arrivalTime = job.completedMs || (job.startedAt + job.osrmDurationMs)
           if (now - arrivalTime > 30000) {
             this.jobs.delete(id)
+            this._totalCompleted++
           }
         }
       }
@@ -244,7 +245,8 @@ export class RouteAnimationEngine {
   }
 
   /** 디버그 정보 */
-  getDebugInfo(): { total: number; inProgress: number; completed: number; queued: number } {
+  private _totalCompleted = 0
+  getDebugInfo(): { total: number; inProgress: number; completed: number; totalCompleted: number } {
     let inProgress = 0
     let completed = 0
     const now = Date.now()
@@ -253,7 +255,7 @@ export class RouteAnimationEngine {
       if (progress >= 1) completed++
       else inProgress++
     }
-    return { total: this.jobs.size, inProgress, completed, queued: 0 }
+    return { total: this.jobs.size, inProgress, completed, totalCompleted: this._totalCompleted }
   }
 
   // 호환성 유지
