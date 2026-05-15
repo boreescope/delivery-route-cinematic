@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button'
 let _pollInterval: ReturnType<typeof setInterval> | null = null
 let _countdown = 300
 let _fetchFn: (() => void) | null = null
+let _lastCount = 0
+let _lastUpdate: string | null = null
+let _lastStatus: 'idle' | 'loading' | 'ok' | 'error' = 'idle'
 
 function startGlobalTimer(fetchFn: () => void) {
   _fetchFn = fetchFn
@@ -30,9 +33,9 @@ function stopGlobalTimer() {
 }
 
 export default function RealtimePanel() {
-  const [count, setCount] = useState(0)
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null)
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+  const [count, setCount] = useState(_lastCount)
+  const [lastUpdate, setLastUpdate] = useState<string | null>(_lastUpdate)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>(_lastStatus)
   const [displayCountdown, setDisplayCountdown] = useState(300)
   const setData = useStore((s) => s.setData)
   const setRealtimeMode = useStore((s) => s.setRealtimeMode)
@@ -42,14 +45,18 @@ export default function RealtimePanel() {
 
   const fetchData = useCallback(async () => {
     setStatus('loading')
+    _lastStatus = 'loading'
     try {
       const resp = await fetch('http://localhost:8000/api/poll')
       if (!resp.ok) throw new Error('HTTP ' + resp.status)
       const data = await resp.json()
       if (data.error) throw new Error(data.error)
       setCount(data.count)
+      _lastCount = data.count
       setLastUpdate(new Date(data.updated_at).toLocaleTimeString('ko-KR'))
+      _lastUpdate = new Date(data.updated_at).toLocaleTimeString('ko-KR')
       setStatus('ok')
+      _lastStatus = 'ok'
       if (data.deliveries?.length > 0) {
         const records = data.deliveries.map((d: Record<string, unknown>) => ({
           ord_no: d.ord_no as string,
@@ -64,6 +71,7 @@ export default function RealtimePanel() {
       }
     } catch {
       setStatus('error')
+      _lastStatus = 'error'
     }
   }, [setData])
 
