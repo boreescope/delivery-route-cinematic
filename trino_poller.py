@@ -37,7 +37,7 @@ TRINO_PORT = int(os.environ.get("TRINO_PORT", "443"))
 TRINO_USER = os.environ.get("TRINO_USER", "")
 TRINO_PASSWORD = os.environ.get("TRINO_PASSWORD", "")
 
-OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR = Path(__file__).parent / "react_dashboard" / "public"
 OUTPUT_FILE = OUTPUT_DIR / "realtime.json"
 
 QUERY_TEMPLATE = """
