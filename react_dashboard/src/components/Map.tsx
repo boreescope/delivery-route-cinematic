@@ -289,8 +289,30 @@ export default function Map() {
     }
   }, [touring])
 
+  // 디버그 정보
+  const [debugInfo, setDebugInfo] = useState({ total: 0, inProgress: 0, completed: 0, queued: 0 })
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (routeEngineRef.current) {
+        setDebugInfo(routeEngineRef.current.getDebugInfo())
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+      {/* 디버그 패널 */}
+      <div style={{
+        position: 'absolute', top: 60, right: 16, zIndex: 20,
+        background: 'rgba(0,0,0,0.75)', color: '#fff', padding: '8px 12px',
+        borderRadius: 8, fontSize: 11, fontFamily: 'monospace', lineHeight: 1.6,
+      }}>
+        <div>jobs: {debugInfo.total}</div>
+        <div>진행중: {debugInfo.inProgress}</div>
+        <div>완료: {debugInfo.completed}</div>
+        <div>data: {filteredData.length}</div>
+      </div>
       {tooltip && (
         <div
           style={{

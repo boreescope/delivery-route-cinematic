@@ -5,6 +5,7 @@ const OSRM_BASE = 'http://localhost:5001/route/v1/driving'
 export interface RouteResult {
   coords: [number, number][] // [lat, lon][]
   dist: number // meters
+  duration: number // seconds (OSRM 예상 이동 시간)
 }
 
 // Route cache (key = "slat,slon,dlat,dlon")
@@ -35,6 +36,7 @@ export async function getRoute(
         const result: RouteResult = {
           coords: decoded.map((c: number[]) => [c[0], c[1]] as [number, number]),
           dist: j.routes[0].distance,
+          duration: j.routes[0].duration,
         }
         routeCache[key] = result
         return JSON.parse(JSON.stringify(result))

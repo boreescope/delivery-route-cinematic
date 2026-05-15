@@ -14,8 +14,8 @@ import type { Layer, PickingInfo } from '@deck.gl/core'
 import { getRoute, type RouteResult } from '../utils/osrm'
 import type { DeliveryRecord } from '../types'
 
-const PATH_WIDTH = 4
-const DOT_RADIUS = 5
+const PATH_WIDTH = 3
+const DOT_RADIUS = 4
 const PALETTE = [
   '#4dd0e1','#81c784','#aed581','#fff176','#4fc3f7','#80deea',
   '#f48fb1','#ce93d8','#b39ddb','#9fa8da','#90caf9','#80cbc4',
@@ -118,7 +118,7 @@ export class RouteAnimationEngine {
           pickupMs,
           completedMs,
           route,
-          osrmDurationMs: route.dist > 0 ? (route.dist / 250) * 60 * 1000 : 600000, // 250m/min 추정
+          osrmDurationMs: route.duration * 1000, // OSRM 예상 이동 시간 (초→ms)
           color: randColor(),
           startedAt: pickupMs, // 픽업 시각부터 시작
         }
@@ -207,11 +207,11 @@ export class RouteAnimationEngine {
         id: 'realtime-paths',
         data: pathData,
         getPath: d => d.path,
-        getColor: d => [...d.color, 200] as [number, number, number, number],
+        getColor: d => [...d.color, 180] as [number, number, number, number],
         getWidth: d => d.width,
         widthUnits: 'pixels',
-        widthMinPixels: 2,
-        widthMaxPixels: 8,
+        widthMinPixels: 1,
+        widthMaxPixels: 6,
         jointRounded: true,
         capRounded: true,
         pickable: false,
@@ -226,8 +226,12 @@ export class RouteAnimationEngine {
         getFillColor: d => [...d.color, 255] as [number, number, number, number],
         getRadius: d => d.radius,
         radiusUnits: 'pixels',
-        radiusMinPixels: 3,
-        radiusMaxPixels: 10,
+        radiusMinPixels: 2,
+        radiusMaxPixels: 6,
+        stroked: true,
+        getLineColor: [40, 40, 40, 200],
+        getLineWidth: 1,
+        lineWidthUnits: 'pixels',
         pickable: false,
       }))
     }
@@ -237,6 +241,19 @@ export class RouteAnimationEngine {
 
   hasData(): boolean {
     return this.jobs.size > 0
+  }
+
+  /** 디버그 정보 */
+  getDebugInfo(): { total: number; inProgress: number; completed: number; queued: number } {
+    let inProgress = 0
+    let completed = 0
+    const now = Date.now()
+    for (const job of this.jobs.values()) {
+      const progress = this._getProgress(job, now)
+      if (progress >= 1) completed++
+      else inProgress++
+    }
+    return { total: this.jobs.size, inProgress, completed, queued: 0 }
   }
 
   // 호환성 유지
