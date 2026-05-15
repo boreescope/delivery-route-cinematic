@@ -60,6 +60,8 @@ WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{minutes}' MINUTE) AT TIME Z
   AND json_extract_scalar(details, '$.shopLocation.latitude') IS NOT NULL
   AND json_extract_scalar(details, '$.customerLocation.latitude') IS NOT NULL
   AND json_extract_scalar(details, '$.expectedPickupDate') IS NOT NULL
+  AND CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) BETWEEN 37.42 AND 37.70
+  AND CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) BETWEEN 126.76 AND 127.18
 LIMIT {limit}
 """
 
@@ -147,7 +149,9 @@ def main():
     parser.add_argument(
         "--minutes", type=int, default=60, help="조회 범위 (분, 기본 60)"
     )
-    parser.add_argument("--limit", type=int, default=5000, help="최대 건수 (기본 5000)")
+    parser.add_argument(
+        "--limit", type=int, default=100000, help="최대 건수 (기본 100000)"
+    )
     args = parser.parse_args()
 
     if args.loop:

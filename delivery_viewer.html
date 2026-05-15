@@ -1102,8 +1102,12 @@ async function renderRealtimeData(deliveries){
     if(!rt){done++;countEl.textContent=done+'/'+total;if(done===total)statusEl.textContent='실시간: '+total+'건 완료';return;}
     rt.coords[0]=[slat,slon];rt.coords[rt.coords.length-1]=[dlat,dlon];
     if(!fitted){
-      const bounds=getRegionFilter();
-      map.fitBounds([[bounds[0],bounds[2]],[bounds[1],bounds[3]]],{padding:[60,60]});
+      // 최초 1회만 지역 범위로 이동 (이후 업데이트에서는 위치 유지)
+      if(!window._rtFittedOnce){
+        const bounds=getRegionFilter();
+        map.fitBounds([[bounds[0],bounds[2]],[bounds[1],bounds[3]]],{padding:[60,60]});
+        window._rtFittedOnce=true;
+      }
       fitted=true;
     }
 
