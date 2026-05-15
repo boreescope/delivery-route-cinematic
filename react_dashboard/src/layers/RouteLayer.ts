@@ -138,7 +138,7 @@ export class RouteAnimationEngine {
       route,
       osrmDurationMs: route.duration * 1000 * 3,
       color: randColor(),
-      startedAt: pickupMs,
+      startedAt: Date.now(),
     }
     this.jobs.set(record.ord_no, job)
 
@@ -176,9 +176,15 @@ export class RouteAnimationEngine {
     const elapsed = now - job.startedAt
     let totalDuration = job.osrmDurationMs
 
-    // 완료된 건이면 실제 소요 시간으로 scale
+    // 완료된 건이면: 남은 경로를 실제 완료 시각에 맞게 조정
     if (job.completedMs) {
-      totalDuration = job.completedMs - job.startedAt
+      const remainingTime = job.completedMs - job.startedAt
+      if (remainingTime > 0) {
+        totalDuration = remainingTime
+      } else {
+        // 이미 완료된 건이 뒤늦게 추가됨 → 즉시 완료
+        return 1
+      }
     }
 
     if (totalDuration <= 0) return 1
