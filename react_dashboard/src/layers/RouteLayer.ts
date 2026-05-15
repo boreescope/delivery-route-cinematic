@@ -15,7 +15,7 @@ import { getRoute, type RouteResult } from '../utils/osrm'
 import type { DeliveryRecord } from '../types'
 
 const PATH_WIDTH = 3
-const DOT_RADIUS = 4
+const DOT_RADIUS = 2
 const PALETTE = [
   '#4dd0e1','#81c784','#aed581','#fff176','#4fc3f7','#80deea',
   '#f48fb1','#ce93d8','#b39ddb','#9fa8da','#90caf9','#80cbc4',
