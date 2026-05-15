@@ -10,6 +10,7 @@ export default function RealtimePanel() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const setData = useStore((s) => s.setData)
+  const setRealtimeMode = useStore((s) => s.setRealtimeMode)
 
   const fetchData = useCallback(async () => {
     setStatus('loading')
@@ -39,6 +40,7 @@ export default function RealtimePanel() {
 
   const start = useCallback(() => {
     setActive(true)
+    setRealtimeMode(true)
     setCountdown(0)
     fetchData()
     if (timerRef.current) clearInterval(timerRef.current)
@@ -51,16 +53,17 @@ export default function RealtimePanel() {
         return c - 1
       })
     }, 1000)
-  }, [fetchData])
+  }, [fetchData, setRealtimeMode])
 
   const stop = useCallback(() => {
     setActive(false)
+    setRealtimeMode(false)
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
     setStatus('idle')
-  }, [])
+  }, [setRealtimeMode])
 
   const mm = Math.floor(countdown / 60)
   const ss = countdown % 60

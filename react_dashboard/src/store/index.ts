@@ -62,12 +62,14 @@ export const COLOR_PALETTES: Record<ColorPalette, [number, number, number][]> = 
 
 interface AppState {
   data: DeliveryRecord[]
+  realtimeMode: boolean
   layers: LayerVisibility
   layerSettings: Record<keyof LayerVisibility, LayerSettings>
   filters: Filters
   theme: MapTheme
   palette: ColorPalette
   setData: (records: DeliveryRecord[]) => void
+  setRealtimeMode: (active: boolean) => void
   toggleLayer: (name: keyof LayerVisibility) => void
   updateLayerSetting: (
     name: keyof LayerVisibility,
@@ -85,6 +87,7 @@ const defaultSettings: LayerSettings = { opacity: 0.8, radius: 40 }
 
 export const useStore = create<AppState>((set, get) => ({
   data: [],
+  realtimeMode: false,
   layers: {
     point: false,
     arc: false,
@@ -112,6 +115,7 @@ export const useStore = create<AppState>((set, get) => ({
   theme: 'dark-matter',
   palette: 'default',
   setData: (records) => set({ data: records }),
+  setRealtimeMode: (active) => set({ realtimeMode: active }),
   toggleLayer: (name) =>
     set((state) => ({
       layers: { ...state.layers, [name]: !state.layers[name] },
