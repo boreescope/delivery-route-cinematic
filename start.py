@@ -83,27 +83,19 @@ def start_react():
 
 
 def start_poller():
-    """Trino poller 시작 (백그라운드)"""
-    print("\n📡 Trino poller 시작 (5분 간격, 서울)...")
+    """API 서버 시작 (백그라운드)"""
+    print("\n📡 API 서버 시작 (포트 8000)...")
     proc = subprocess.Popen(
-        [
-            str(VENV_PYTHON),
-            str(ROOT / "trino_poller.py"),
-            "--loop",
-            "--interval",
-            "300",
-            "--minutes",
-            "60",
-        ],
+        [str(VENV_PYTHON), "-u", str(ROOT / "api_server.py")],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
     )
-    # 첫 폴링 결과 대기
+    # 시작 메시지 대기
     for line in proc.stdout:
         print(f"  {line.strip()}")
-        if "✅" in line or "❌" in line:
+        if "🚀" in line or "❌" in line:
             break
     return proc
 

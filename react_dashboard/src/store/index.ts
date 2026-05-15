@@ -94,7 +94,7 @@ export const useStore = create<AppState>((set, get) => ({
     heatmap: false,
     hexbin: false,
     cluster: false,
-    route: false,
+    route: true,
     trip: false,
   },
   layerSettings: {

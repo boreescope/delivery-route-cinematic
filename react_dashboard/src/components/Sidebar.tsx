@@ -35,6 +35,8 @@ const LAYER_LABELS: Record<keyof LayerVisibility, { emoji: string; name: string 
   trip: { emoji: '🚗', name: 'Trip' },
 }
 
+const VISIBLE_LAYERS: (keyof LayerVisibility)[] = ['route']
+
 const RADIUS_LABELS: Partial<Record<keyof LayerVisibility, { label: string; min: number; max: number; step: number }>> = {
   point: { label: '크기', min: 10, max: 200, step: 10 },
   arc: { label: '두께', min: 0.5, max: 5, step: 0.5 },
@@ -173,7 +175,7 @@ export default function Sidebar() {
         />
         {expandedSection === 'layers' && (
           <div className="px-3 pb-3 space-y-1">
-            {(Object.keys(LAYER_LABELS) as (keyof LayerVisibility)[]).map((key) => (
+            {(VISIBLE_LAYERS).map((key) => (
               <div key={key}>
                 <div className="flex items-center justify-between py-1.5">
                   <div className="flex items-center gap-2">

@@ -15,9 +15,10 @@ export default function RealtimePanel() {
   const fetchData = useCallback(async () => {
     setStatus('loading')
     try {
-      const resp = await fetch('/realtime.json?t=' + Date.now())
+      const resp = await fetch('http://localhost:8000/api/poll')
       if (!resp.ok) throw new Error('HTTP ' + resp.status)
       const data = await resp.json()
+      if (data.error) throw new Error(data.error)
       setCount(data.count)
       setLastUpdate(new Date(data.updated_at).toLocaleTimeString('ko-KR'))
       setStatus('ok')
@@ -68,7 +69,8 @@ export default function RealtimePanel() {
   const mm = Math.floor(countdown / 60)
   const ss = countdown % 60
   const now = new Date()
-  const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  const delayed = new Date(now.getTime() - 5 * 60 * 1000)
+  const clock = `${String(delayed.getHours()).padStart(2, '0')}:${String(delayed.getMinutes()).padStart(2, '0')}:${String(delayed.getSeconds()).padStart(2, '0')}`
 
   return (
     <div className="px-3 pb-3 space-y-3">
@@ -76,7 +78,7 @@ export default function RealtimePanel() {
       <div className="text-center">
         <div className="text-2xl font-bold text-foreground tabular-nums">{clock}</div>
         <div className="text-[10px] text-muted-foreground">
-          현재 시각 <span className="text-muted-foreground/60 ml-1">~5분 지연</span>
+          데이터 시각 <span className="text-muted-foreground/60 ml-1">(5분 지연)</span>
         </div>
       </div>
 

@@ -1,0 +1,204 @@
+"""배달동선 실시간 API 서버
+
+프론트에서 /api/poll 호출 → 즉시 Trino 쿼리 → JSON 반환
+프론트에서 /api/status 호출 → 마지막 폴링 상태 반환
+
+사용법:
+    python api_server.py          # 포트 8000
+    python api_server.py --port 8001
+"""
+
+import json
+import os
+import time
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse
+
+from trino.dbapi import connect
+from trino.auth import BasicAuthentication
+
+# .env 로드
+for env_path in [
+    Path.home() / ".kiro" / "secrets" / ".env",
+    Path.home() / ".claude" / "secrets" / ".env",
+]:
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip())
+        break
+
+TRINO_HOST = os.environ.get("TRINO_HOST", "trino-auth.emr.ds.woowa.in")
+TRINO_PORT = int(os.environ.get("TRINO_PORT", "443"))
+TRINO_USER = os.environ.get("TRINO_USER", "")
+TRINO_PASSWORD = os.environ.get("TRINO_PASSWORD", "")
+
+QUERY_TEMPLATE = """
+WITH completed AS (
+  SELECT ord_no, log_ts AS completed_ts,
+    CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) AS shop_lat,
+    CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) AS shop_lon,
+    CAST(json_extract_scalar(details, '$.customerLocation.latitude') AS DOUBLE) AS dlvry_lat,
+    CAST(json_extract_scalar(details, '$.customerLocation.longitude') AS DOUBLE) AS dlvry_lon,
+    json_extract_scalar(details, '$.deliveryMethod') AS delivery_method,
+    json_extract_scalar(details, '$.isSingle') AS is_single,
+    json_extract_scalar(details, '$.agencyId') AS agency_id
+  FROM raw_log.serverlog_delivery_status_change
+  WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{minutes}' MINUTE) AT TIME ZONE 'Asia/Seoul'
+                   AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
+    AND event = 'DELIVERY_COMPLETED'
+    AND json_extract_scalar(details, '$.shopLocation.latitude') IS NOT NULL
+    AND json_extract_scalar(details, '$.customerLocation.latitude') IS NOT NULL
+    AND CAST(json_extract_scalar(details, '$.shopLocation.latitude') AS DOUBLE) BETWEEN 37.42 AND 37.70
+    AND CAST(json_extract_scalar(details, '$.shopLocation.longitude') AS DOUBLE) BETWEEN 126.76 AND 127.18
+),
+pickup AS (
+  SELECT ord_no, MAX(log_ts) AS pickup_ts
+  FROM raw_log.serverlog_delivery_status_change
+  WHERE log_ts BETWEEN (CURRENT_TIMESTAMP - INTERVAL '{pickup_range}' MINUTE) AT TIME ZONE 'Asia/Seoul'
+                   AND CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
+    AND event = 'PICKUP_COMPLETED'
+  GROUP BY ord_no
+)
+SELECT c.ord_no, c.shop_lat, c.shop_lon, c.dlvry_lat, c.dlvry_lon,
+       c.delivery_method, c.is_single, c.agency_id,
+       p.pickup_ts, c.completed_ts,
+       DATE_DIFF('second', p.pickup_ts, c.completed_ts) AS actual_seconds
+FROM completed c
+JOIN pickup p ON c.ord_no = p.ord_no
+WHERE DATE_DIFF('second', p.pickup_ts, c.completed_ts) BETWEEN 60 AND 7200
+LIMIT {limit}
+"""
+
+# 캐시 (같은 요청 반복 방지)
+_cache = {"data": None, "ts": 0}
+CACHE_TTL = 60  # 1분 이내 재요청은 캐시 반환
+
+
+def get_connection():
+    return connect(
+        host=TRINO_HOST,
+        port=TRINO_PORT,
+        catalog="hive_zeppelin",
+        schema="raw_log",
+        http_scheme="https",
+        user=TRINO_USER,
+        auth=BasicAuthentication(TRINO_USER, TRINO_PASSWORD),
+    )
+
+
+def fetch_data(minutes: int = 60, limit: int = 100000) -> dict:
+    now = time.time()
+    if _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
+        return _cache["data"]
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        pickup_range = minutes + 60
+        cur.execute(
+            QUERY_TEMPLATE.format(
+                minutes=minutes, pickup_range=pickup_range, limit=limit
+            )
+        )
+        columns = [desc[0] for desc in cur.description]
+        rows = cur.fetchall()
+        data = [dict(zip(columns, row)) for row in rows]
+    finally:
+        conn.close()
+
+    kst = timezone(timedelta(hours=9))
+    output = {
+        "updated_at": datetime.now(kst).isoformat(),
+        "count": len(data),
+        "deliveries": [
+            {
+                "ord_no": d["ord_no"],
+                "shop_lat": d["shop_lat"],
+                "shop_lon": d["shop_lon"],
+                "dlvry_lat": d["dlvry_lat"],
+                "dlvry_lon": d["dlvry_lon"],
+                "delivery_method": d["delivery_method"],
+                "is_single": d["is_single"] == "true",
+                "agency_id": d["agency_id"],
+                "pickup_ts": str(d["pickup_ts"]),
+                "completed_ts": str(d["completed_ts"]),
+                "actual_seconds": d["actual_seconds"],
+            }
+            for d in data
+            if d["shop_lat"] and d["dlvry_lat"] and d["actual_seconds"]
+        ],
+    }
+
+    _cache["data"] = output
+    _cache["ts"] = now
+    return output
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        path = urlparse(self.path).path
+
+        if path == "/api/poll":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            try:
+                data = fetch_data()
+                self.wfile.write(
+                    json.dumps(data, ensure_ascii=False, default=str).encode()
+                )
+            except Exception as e:
+                err = {"error": f"{type(e).__name__}: {e}"}
+                self.wfile.write(json.dumps(err).encode())
+
+        elif path == "/api/status":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            status = {
+                "cache_age": int(time.time() - _cache["ts"]) if _cache["ts"] else None,
+                "cached_count": _cache["data"]["count"] if _cache["data"] else 0,
+            }
+            self.wfile.write(json.dumps(status).encode())
+
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        kst = timezone(timedelta(hours=9))
+        now = datetime.now(kst).strftime("%H:%M:%S")
+        print(f"[{now}] {args[0]}")
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="배달동선 실시간 API 서버")
+    parser.add_argument("--port", type=int, default=8000, help="포트 (기본 8000)")
+    args = parser.parse_args()
+
+    server = HTTPServer(("0.0.0.0", args.port), Handler)
+    print(f"🚀 API 서버 시작: http://localhost:{args.port}")
+    print("   /api/poll   — Trino 쿼리 실행 + JSON 반환")
+    print("   /api/status — 캐시 상태")
+    print("   중지: Ctrl+C")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

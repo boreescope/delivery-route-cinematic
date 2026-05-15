@@ -113,24 +113,20 @@ export class RouteAnimationEngine {
   async processRecords(records: DeliveryRecord[]): Promise<void> {
     this.reset()
     const gen = this._generationId
-    const total = records.length
+    const now = Date.now()
 
-    // 기준선: 현재 - 5분30초 이후 픽업된 건만 그림
-    const cutoff = Date.now() - 5.5 * 60 * 1000
+    // 최근 5분간 픽업된 건만 (= 현재 진행 중이거나 방금 끝난 것)
+    const fiveMinAgo = now - 5 * 60 * 1000
 
-    // 픽업 시각 기준 필터 + 정렬
     const filtered = records.filter((r) => {
-      if (!r.pick_up_date) return false
+      if (!r.pick_up_date || !r.hand_over_date) return false
       const pickupStr = r.pick_up_date.split('+')[0].split('.')[0].replace(' ', 'T') + '+09:00'
       const pickupMs = new Date(pickupStr).getTime()
-      return pickupMs >= cutoff
+      return pickupMs >= fiveMinAgo
     })
 
-    // Shuffle for visual variety
-    const shuffled = [...filtered].sort(() => Math.random() - 0.5)
-
     // Concurrent fetch (3 workers)
-    const queue = shuffled.map((r, i) => ({ record: r, index: i }))
+    const queue = filtered.map((r, i) => ({ record: r, index: i }))
     const worker = async () => {
       while (queue.length > 0) {
         if (gen !== this._generationId) return
@@ -139,7 +135,7 @@ export class RouteAnimationEngine {
         await this._fetchAndAnimate(item.record, item.index, filtered.length, gen)
       }
     }
-    await Promise.all(Array(Math.min(3, filtered.length)).fill(null).map(() => worker()))
+    await Promise.all(Array(Math.min(3, filtered.length || 1)).fill(null).map(() => worker()))
   }
 
   private async _fetchAndAnimate(
@@ -153,92 +149,67 @@ export class RouteAnimationEngine {
     const rt = await getRoute(record.shop_lat, record.shop_lon, record.dlvry_lat, record.dlvry_lon)
     if (!rt || gen !== this._generationId) return
 
-    // Fix start/end to exact coords
     rt.coords[0] = [record.shop_lat, record.shop_lon]
     rt.coords[rt.coords.length - 1] = [record.dlvry_lat, record.dlvry_lon]
 
-    // Calculate actual duration from pickup → completion
-    let totalDurationMs = 600000 // fallback 10분
-    let durText = ''
-    let pickupMs = Date.now()
+    // 실제 이동 시간 계산
+    const pickupStr = record.pick_up_date.split('+')[0].split('.')[0].replace(' ', 'T') + '+09:00'
+    const handoverStr = record.hand_over_date.split('+')[0].split('.')[0].replace(' ', 'T') + '+09:00'
+    const pickupMs = new Date(pickupStr).getTime()
+    const handoverMs = new Date(handoverStr).getTime()
+    const totalDurationMs = Math.max(handoverMs - pickupMs, 60000)
 
-    if (record.pick_up_date && record.hand_over_date) {
-      const pickupStr = record.pick_up_date.split('+')[0].split('.')[0].replace(' ', 'T') + '+09:00'
-      const handoverStr = record.hand_over_date.split('+')[0].split('.')[0].replace(' ', 'T') + '+09:00'
-      const pickup = new Date(pickupStr)
-      const handover = new Date(handoverStr)
-      const dur = handover.getTime() - pickup.getTime()
-      if (dur > 0 && dur < 7200000) {
-        totalDurationMs = dur
-        pickupMs = pickup.getTime()
-        const mins = Math.round(dur / 60000)
-        durText = mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`
-      }
-    }
-
-    // 현재 시각 기준 진행률
+    // 현재 진행률
     const now = Date.now()
     const elapsed = now - pickupMs
     const progress = Math.min(Math.max(elapsed / totalDurationMs, 0), 1)
 
-    // 남은 시간 (실제 시간 1:1)
-    const remainingMs = Math.max(totalDurationMs - elapsed, 1000)
+    if (progress >= 1) return // 이미 끝남 → 스킵
+
+    // 남은 시간 (실제 1:1)
+    const remainingMs = totalDurationMs - elapsed
 
     const color = randColor()
     const gid = `g${index}`
-    const tip = `#${index + 1} ${Math.round(rt.dist)}m${durText ? ' / ' + durText : ''}`
+    const mins = Math.round(totalDurationMs / 60000)
+    const durText = mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`
+    const tip = `#${index + 1} ${Math.round(rt.dist)}m / ${durText}`
 
-    if (progress > 0 && progress < 1) {
-      // 진행 중: 이미 지나간 부분 즉시 그리고, 나머지 애니메이션
+    if (progress > 0) {
+      // 진행 중: 이미 지나간 부분 즉시 그리고, 나머지 실시간 애니메이션
       const splitIdx = Math.max(1, Math.floor(rt.coords.length * progress))
       const doneCoords = rt.coords.slice(0, splitIdx + 1)
       const remainCoords = rt.coords.slice(splitIdx)
 
       const rgb = hexToRgb(color)
       const offsetDone = offsetCoords(doneCoords)
-
-      // 완료 부분 즉시 렌더
       const donePath: [number, number][] = offsetDone.map((c) => [c[1], c[0]])
+
       if (donePath.length >= 2) {
-        this.pathData = [
-          ...this.pathData,
-          {
-            id: `${gid}_done`,
-            path: donePath,
-            color: rgb,
-            width: PATH_WIDTH,
-            tipText: tip,
-            groupId: gid,
-          },
-        ]
-      }
-      // 시작점
-      this.endpointData = [
-        ...this.endpointData,
-        {
-          position: [rt.coords[0][1], rt.coords[0][0]],
+        this.pathData = [...this.pathData, {
+          id: `${gid}_done`,
+          path: donePath,
           color: rgb,
-          radius: ENDPOINT_RADIUS,
+          width: PATH_WIDTH,
           tipText: tip,
           groupId: gid,
-          label: '가게',
-        },
-      ]
+        }]
+      }
+      this.endpointData = [...this.endpointData, {
+        position: [rt.coords[0][1], rt.coords[0][0]],
+        color: rgb,
+        radius: ENDPOINT_RADIUS,
+        tipText: tip,
+        groupId: gid,
+        label: '가게',
+      }]
       this._onUpdate()
 
-      // 나머지 애니메이션 (남은 실제 시간)
       if (remainCoords.length >= 2) {
         await this._animateRoute(remainCoords, color, remainingMs, gid + '_r', tip, gen)
       }
-    } else if (progress >= 1) {
-      // 이미 완료 → 스킵 (기준선 필터에서 걸러져야 하지만 안전장치)
-      return
     } else {
-      // 아직 시작 안 함 → 대기 후 시작 (거의 없을 것)
-      const delay = pickupMs - now
-      if (delay > 0 && delay < 600000) {
-        await new Promise((r) => setTimeout(r, delay))
-      }
+      // 아직 시작 안 함 → 전체 애니메이션
       await this._animateRoute(rt.coords, color, totalDurationMs, gid, tip, gen)
     }
   }
