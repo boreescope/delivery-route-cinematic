@@ -4,7 +4,6 @@ import { MapboxOverlay } from '@deck.gl/mapbox'
 import type { Layer, PickingInfo } from '@deck.gl/core'
 import { useStore, MAP_THEME_URLS } from '../store'
 import { RouteAnimationEngine } from '../layers'
-import type { DeliveryRecord } from '../types'
 import Playbar from './Playbar'
 
 const INITIAL_VIEW = {
@@ -73,10 +72,8 @@ export default function Map() {
 
   const data = useStore((s) => s.data)
   const layers = useStore((s) => s.layers)
-  const layerSettings = useStore((s) => s.layerSettings)
   const filters = useStore((s) => s.filters)
   const theme = useStore((s) => s.theme)
-  const setData = useStore((s) => s.setData)
 
   // Filter data based on store filters
   const filteredData = useMemo(() => {
@@ -159,9 +156,6 @@ export default function Map() {
     routeEngineRef.current.handleClick(info)
     setRouteRevision((r) => r + 1)
   }, [])
-
-  // Standard layer hover — 비활성 (Route만 사용)
-  const onHover = useCallback((_info: PickingInfo) => {}, [])
 
   // Initialize map
   useEffect(() => {
@@ -290,7 +284,7 @@ export default function Map() {
   }, [touring])
 
   // 디버그 정보
-  const [debugInfo, setDebugInfo] = useState({ total: 0, inProgress: 0, completed: 0, queued: 0 })
+  const [debugInfo, setDebugInfo] = useState({ total: 0, inProgress: 0, completed: 0, totalCompleted: 0 })
   useEffect(() => {
     const interval = setInterval(() => {
       if (routeEngineRef.current) {
