@@ -47,7 +47,7 @@ export default function RealtimePanel() {
     setStatus('loading')
     _lastStatus = 'loading'
     try {
-      const resp = await fetch('http://localhost:8000/api/poll')
+      const resp = await fetch('/api/poll')
       if (!resp.ok) throw new Error('HTTP ' + resp.status)
       const data = await resp.json()
       if (data.error) throw new Error(data.error)
