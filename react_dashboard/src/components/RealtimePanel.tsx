@@ -47,7 +47,10 @@ export default function RealtimePanel() {
     setStatus('loading')
     _lastStatus = 'loading'
     try {
-      const resp = await fetch('/api/poll')
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 90000)
+      const resp = await fetch('/api/poll', { signal: controller.signal })
+      clearTimeout(timeout)
       if (!resp.ok) throw new Error('HTTP ' + resp.status)
       const data = await resp.json()
       if (data.error) throw new Error(data.error)
