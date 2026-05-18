@@ -178,6 +178,31 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"status":"ok"}')
 
+        elif path == "/api/debug":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            info = {
+                "trino_host": TRINO_HOST,
+                "trino_port": TRINO_PORT,
+                "trino_user": TRINO_USER[:3] + "***" if TRINO_USER else "EMPTY",
+                "trino_password": "SET" if TRINO_PASSWORD else "EMPTY",
+                "secret_dir_exists": Path("/mnt/secrets").exists(),
+                "secret_files": list(Path("/mnt/secrets").iterdir())
+                if Path("/mnt/secrets").exists()
+                else [],
+            }
+            try:
+                import socket
+
+                sock = socket.create_connection((TRINO_HOST, TRINO_PORT), timeout=10)
+                sock.close()
+                info["tcp_connect"] = "OK"
+            except Exception as e:
+                info["tcp_connect"] = f"FAIL: {e}"
+            self.wfile.write(json.dumps(info, ensure_ascii=False, default=str).encode())
+
         else:
             # 정적 파일 서빙 (React 빌드 결과물)
             self._serve_static(path)
