@@ -34,7 +34,7 @@ for env_path in [
                 os.environ.setdefault(key.strip(), value.strip())
         break
 
-TRINO_HOST = os.environ.get("TRINO_HOST", "trino-auth.emr.ds.woowa.in")
+TRINO_HOST = os.environ.get("TRINO_HOST", "trino.emr.ds.woowa.in")
 TRINO_PORT = int(os.environ.get("TRINO_PORT", "443"))
 TRINO_USER = os.environ.get("TRINO_USER", "")
 TRINO_PASSWORD = os.environ.get("TRINO_PASSWORD", "")
@@ -74,15 +74,18 @@ CACHE_TTL = 60  # 1분 이내 재요청은 캐시 반환
 
 
 def get_connection():
-    return connect(
-        host=TRINO_HOST,
-        port=TRINO_PORT,
-        catalog="hive_zeppelin",
-        schema="raw_log",
-        http_scheme="https",
-        user=TRINO_USER,
-        auth=BasicAuthentication(TRINO_USER, TRINO_PASSWORD),
-    )
+    kwargs = {
+        "host": TRINO_HOST,
+        "port": TRINO_PORT,
+        "catalog": "hive_zeppelin",
+        "schema": "raw_log",
+        "http_scheme": "https",
+        "user": TRINO_USER or "delivery-route-web",
+    }
+    # trino-auth 호스트면 Basic Auth 사용
+    if "auth" in TRINO_HOST and TRINO_USER and TRINO_PASSWORD:
+        kwargs["auth"] = BasicAuthentication(TRINO_USER, TRINO_PASSWORD)
+    return connect(**kwargs)
 
 
 def fetch_data(minutes: int = 10, limit: int = 100000) -> dict:
