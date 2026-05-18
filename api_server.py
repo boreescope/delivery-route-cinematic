@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from urllib.parse import urlparse
 
 from trino.dbapi import connect
@@ -231,6 +232,10 @@ class Handler(BaseHTTPRequestHandler):
         print(f"[{now}] {args[0]}")
 
 
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+
 def main():
     import argparse
 
@@ -238,7 +243,7 @@ def main():
     parser.add_argument("--port", type=int, default=8000, help="포트 (기본 8000)")
     args = parser.parse_args()
 
-    server = HTTPServer(("0.0.0.0", args.port), Handler)
+    server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     print(f"🚀 API 서버 시작: http://localhost:{args.port}")
     print("   /api/poll   — Trino 쿼리 실행 + JSON 반환")
     print("   /api/status — 캐시 상태")
