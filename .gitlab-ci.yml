@@ -15,8 +15,8 @@ containerize:
     - |
       docker build \
         --push \
-        --tag wcr.baemin.in/creative-asset/delivery-route:${CI_COMMIT_SHORT_SHA} \
-        --tag wcr.baemin.in/creative-asset/delivery-route:latest \
+        --tag wcr.baemin.in/design-asset/delivery-route:${CI_COMMIT_SHORT_SHA} \
+        --tag wcr.baemin.in/design-asset/delivery-route:latest \
         .
   only:
     - main
