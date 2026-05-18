@@ -85,7 +85,7 @@ def get_connection():
     )
 
 
-def fetch_data(minutes: int = 30, limit: int = 100000) -> dict:
+def fetch_data(minutes: int = 10, limit: int = 100000) -> dict:
     now = time.time()
     if _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
         return _cache["data"]
