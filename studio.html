@@ -156,6 +156,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button onclick="previewStop()" title="정지">⏹</button>
     <button onclick="previewSeek(0)" title="처음으로">⏮</button>
     <span class="tl-time" id="tl-time">0:00.0 / 0:00.0</span>
+    <button onclick="changeSpeed(-1)" title="느리게">−</button>
+    <span id="tl-speed" style="font-size:11px;color:#e94560;min-width:36px;text-align:center;font-weight:600">1×</span>
+    <button onclick="changeSpeed(1)" title="빠르게">+</button>
     <span class="tl-duration" id="tl-total"></span>
   </div>
   <div id="tl-track">
@@ -296,6 +299,8 @@ let isPlaying = false;
 let playStartTime = 0;
 let playElapsed = 0;
 let playRAF = null;
+let playbackSpeed = 1;
+const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8];
 let isRecording = false;
 let mediaRecorders = [];
 let recordedChunks = {};
@@ -555,11 +560,14 @@ function previewPlay() {
   isPlaying = true;
   const total = getTotalDuration();
   if (playElapsed >= total) playElapsed = 0;
-  playStartTime = performance.now() - playElapsed * 1000;
+  let lastTick = performance.now();
 
   function tick() {
     if (!isPlaying) return;
-    playElapsed = (performance.now() - playStartTime) / 1000;
+    const now = performance.now();
+    const dt = (now - lastTick) / 1000 * playbackSpeed;
+    lastTick = now;
+    playElapsed += dt;
     if (playElapsed >= total) {
       playElapsed = total; isPlaying = false;
       updateTimeDisplay(playElapsed);
@@ -575,6 +583,16 @@ function previewPlay() {
     playRAF = requestAnimationFrame(tick);
   }
   playRAF = requestAnimationFrame(tick);
+}
+
+function changeSpeed(dir) {
+  const curIdx = SPEED_STEPS.indexOf(playbackSpeed);
+  let newIdx = curIdx + dir;
+  if (curIdx === -1) newIdx = dir > 0 ? SPEED_STEPS.findIndex(s => s > playbackSpeed) : SPEED_STEPS.findLastIndex(s => s < playbackSpeed);
+  newIdx = Math.max(0, Math.min(SPEED_STEPS.length - 1, newIdx));
+  playbackSpeed = SPEED_STEPS[newIdx];
+  document.getElementById('tl-speed').textContent = playbackSpeed + '×';
+  toast(`재생 속도: ${playbackSpeed}×`);
 }
 
 function previewStop() {
