@@ -361,8 +361,8 @@ document.getElementById('csv-file').addEventListener('change', async (e) => {
       geometry: { type: 'LineString', coordinates: coords }
     });
     endpointGeoJSON.features.push(
-      { type: 'Feature', properties: { color, type: 'shop' }, geometry: { type: 'Point', coordinates: [slon, slat] }},
-      { type: 'Feature', properties: { color, type: 'delivery' }, geometry: { type: 'Point', coordinates: [dlon, dlat] }}
+      { type: 'Feature', properties: { color, type: 'shop', routeId: i }, geometry: { type: 'Point', coordinates: [slon, slat] }},
+      { type: 'Feature', properties: { color, type: 'delivery', routeId: i }, geometry: { type: 'Point', coordinates: [dlon, dlat] }}
     );
     done++;
     if (done % 20 === 0) { toast(`경로 로딩: ${done}/${rows.length}`); addRouteLayers(); }
@@ -577,13 +577,19 @@ function previewPlay() {
     if (playElapsed >= total) {
       playElapsed = total; isPlaying = false;
       updateTimeDisplay(playElapsed);
+      setRouteProgress(1);
       if (isRecording) stopRecording();
       return;
     }
     const state = getStateAtTime(playElapsed);
     if (state) {
       map.jumpTo({ center: [state.lng, state.lat], zoom: state.zoom, pitch: state.pitch, bearing: state.bearing });
-      setRouteVisibility(state.showRoutes);
+      if (state.showRoutes) {
+        setRouteVisibility(true);
+        setRouteProgress(playElapsed / total);
+      } else {
+        setRouteVisibility(false);
+      }
     }
     updateTimeDisplay(playElapsed);
     playRAF = requestAnimationFrame(tick);
@@ -604,6 +610,7 @@ function changeSpeed(dir) {
 function previewStop() {
   isPlaying = false;
   if (playRAF) cancelAnimationFrame(playRAF);
+  resetRouteProgress();
   if (isRecording) stopRecording();
 }
 
@@ -619,6 +626,34 @@ function setRouteVisibility(show) {
   const vis = show ? 'visible' : 'none';
   ['routes-outline', 'routes-line', 'endpoints-circle'].forEach(id => {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
+  });
+}
+
+// 경로를 진행률에 따라 점진적으로 보여줌
+let revealedRouteCount = -1; // -1 = 전부 표시 (비재생 상태)
+function setRouteProgress(progress) {
+  // progress: 0~1 (전체 타임라인 기준)
+  const totalFeatures = routeGeoJSON.features.length;
+  if (totalFeatures === 0) return;
+  const target = Math.floor(progress * totalFeatures);
+  if (target === revealedRouteCount) return;
+  revealedRouteCount = target;
+
+  // 필터: id < target인 feature만 표시
+  const filter = ['<=', ['get', 'id'], target - 1];
+  ['routes-outline', 'routes-line'].forEach(id => {
+    if (map.getLayer(id)) map.setFilter(id, filter);
+  });
+  // endpoint는 route 2개씩 (shop, delivery)
+  if (map.getLayer('endpoints-circle')) {
+    map.setFilter('endpoints-circle', ['<=', ['get', 'routeId'], target - 1]);
+  }
+}
+
+function resetRouteProgress() {
+  revealedRouteCount = -1;
+  ['routes-outline', 'routes-line', 'endpoints-circle'].forEach(id => {
+    if (map.getLayer(id)) map.setFilter(id, null);
   });
 }
 
