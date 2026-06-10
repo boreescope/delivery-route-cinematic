@@ -11,6 +11,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #toolbar h1{font-size:14px;font-weight:600;color:#fff;margin-right:auto}
 #toolbar button{background:#0f3460;color:#e0e0e0;border:1px solid #2a4a7a;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s}
 #toolbar button:hover{background:#1a5276;border-color:#4a8abf}
+#toolbar button.active{background:#1a5276;border-color:#4fc3f7;color:#4fc3f7}
 #toolbar button.primary{background:#e94560;border-color:#e94560;color:#fff}
 #toolbar button.primary:hover{background:#c0392b}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
@@ -21,6 +22,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 #viewport{flex:1;position:relative;background:#000}
 #map{width:100%;height:100%}
+#rain-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;opacity:0;transition:opacity .5s}
+#rain-canvas.active{opacity:1}
 #viewport-overlay{position:absolute;top:8px;left:8px;z-index:10;font-size:11px;color:rgba(255,255,255,.9);pointer-events:none;background:rgba(0,0,0,.5);padding:5px 10px;border-radius:5px;font-family:'SF Mono',Monaco,monospace}
 #rec-indicator{display:none;position:absolute;top:12px;right:12px;z-index:10;background:rgba(231,76,60,.9);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;animation:pulse 1s infinite}
 #camera-hint{position:absolute;bottom:12px;left:12px;z-index:10;font-size:11px;color:rgba(255,255,255,.4);pointer-events:none}
@@ -95,6 +98,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <option value="watercolor">🎨 수채화</option>
   </select>
   <div class="sep"></div>
+  <button id="btn-rain" onclick="toggleRain()">🌧 비</button>
+  <div class="sep"></div>
   <button id="btn-preview" onclick="previewPlay()">▶ 미리보기</button>
   <button id="btn-stop" onclick="previewStop()">⏹ 정지</button>
   <div class="sep"></div>
@@ -104,6 +109,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div id="main">
   <div id="viewport">
     <div id="map"></div>
+    <canvas id="rain-canvas"></canvas>
     <div id="viewport-overlay"><span id="vp-info"></span></div>
     <div id="rec-indicator">⏺ REC</div>
     <div id="camera-hint">우클릭 드래그: 3D 회전 · Ctrl+드래그: pitch · 스크롤: 줌</div>
@@ -680,4 +686,92 @@ function toast(msg) {
 }
 
 renderSceneList(); renderTimeline();
+
+// ===== 비 효과 =====
+let rainActive = false;
+let rainRAF = null;
+const rainCanvas = document.getElementById('rain-canvas');
+const rainCtx = rainCanvas.getContext('2d');
+let drops = [];
+
+function initRainCanvas() {
+  const rect = rainCanvas.parentElement.getBoundingClientRect();
+  rainCanvas.width = rect.width * window.devicePixelRatio;
+  rainCanvas.height = rect.height * window.devicePixelRatio;
+  rainCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+
+function createDrops() {
+  const w = rainCanvas.width / window.devicePixelRatio;
+  const h = rainCanvas.height / window.devicePixelRatio;
+  drops = [];
+  const count = Math.floor(w * h / 800);
+  for (let i = 0; i < count; i++) {
+    drops.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      len: 12 + Math.random() * 18,
+      speed: 8 + Math.random() * 12,
+      opacity: 0.15 + Math.random() * 0.3,
+      width: 0.8 + Math.random() * 0.7
+    });
+  }
+}
+
+function drawRain() {
+  if (!rainActive) return;
+  const w = rainCanvas.width / window.devicePixelRatio;
+  const h = rainCanvas.height / window.devicePixelRatio;
+  rainCtx.clearRect(0, 0, w, h);
+
+  const wind = Math.sin(Date.now() * 0.0003) * 2;
+
+  for (const d of drops) {
+    d.y += d.speed;
+    d.x += wind * 0.5;
+    if (d.y > h) { d.y = -d.len; d.x = Math.random() * w; }
+    if (d.x > w) d.x = 0;
+    if (d.x < 0) d.x = w;
+
+    rainCtx.beginPath();
+    rainCtx.moveTo(d.x, d.y);
+    rainCtx.lineTo(d.x + wind * 0.3, d.y + d.len);
+    rainCtx.strokeStyle = `rgba(180, 210, 240, ${d.opacity})`;
+    rainCtx.lineWidth = d.width;
+    rainCtx.lineCap = 'round';
+    rainCtx.stroke();
+  }
+
+  // 바닥 splash (간단)
+  for (let i = 0; i < 3; i++) {
+    const sx = Math.random() * w;
+    const sy = h - 2 - Math.random() * 6;
+    rainCtx.beginPath();
+    rainCtx.arc(sx, sy, 1 + Math.random() * 1.5, 0, Math.PI, true);
+    rainCtx.strokeStyle = 'rgba(180, 210, 240, 0.2)';
+    rainCtx.lineWidth = 0.5;
+    rainCtx.stroke();
+  }
+
+  rainRAF = requestAnimationFrame(drawRain);
+}
+
+function toggleRain() {
+  rainActive = !rainActive;
+  const btn = document.getElementById('btn-rain');
+  if (rainActive) {
+    btn.classList.add('active');
+    rainCanvas.classList.add('active');
+    initRainCanvas();
+    createDrops();
+    drawRain();
+  } else {
+    btn.classList.remove('active');
+    rainCanvas.classList.remove('active');
+    if (rainRAF) cancelAnimationFrame(rainRAF);
+    rainCtx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
+  }
+}
+
+window.addEventListener('resize', () => { if (rainActive) { initRainCanvas(); createDrops(); } });
 </script>
