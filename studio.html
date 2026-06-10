@@ -669,7 +669,6 @@ function startRender() {
   const fps = +document.getElementById('ex-fps').value;
   const layer = document.getElementById('ex-layer').value;
 
-  toast('렌더링 시작... 재생 완료 시 자동 저장');
   isRecording = true;
   document.getElementById('rec-indicator').style.display = 'block';
   recordedChunks = {};
@@ -678,18 +677,100 @@ function startRender() {
   const mimeType = 'video/webm;codecs=vp9';
   const canvas = map.getCanvas();
 
-  if (layer === 'composite' || layer === 'map' || layer === 'separate') {
+  if (layer === 'separate') {
+    // 2-pass: 먼저 지도만, 그 다음 동선만
+    toast('렌더링 1/2: 지도만 녹화 중...');
+    setRouteVisibility(false);
+    resetRouteProgress();
+
+    const stream1 = canvas.captureStream(fps);
+    const rec1 = new MediaRecorder(stream1, { mimeType, videoBitsPerSecond: 12000000 });
+    recordedChunks['map'] = [];
+    rec1.ondataavailable = e => { if (e.data.size > 0) recordedChunks['map'].push(e.data); };
+    rec1.onstop = () => {
+      saveRecording('map');
+      // 2nd pass: 동선만
+      toast('렌더링 2/2: 동선만 녹화 중...');
+      // 지도 타일 숨기기 (배경을 투명하게 — MapLibre는 직접 지원 안 하므로 타일 레이어 opacity 0)
+      hideMapTiles(true);
+      setRouteVisibility(true);
+
+      const stream2 = canvas.captureStream(fps);
+      const rec2 = new MediaRecorder(stream2, { mimeType, videoBitsPerSecond: 12000000 });
+      recordedChunks['route'] = [];
+      rec2.ondataavailable = e => { if (e.data.size > 0) recordedChunks['route'].push(e.data); };
+      rec2.onstop = () => { saveRecording('route'); hideMapTiles(false); };
+      mediaRecorders = [rec2];
+      rec2.start(100);
+      previewSeek(0);
+      previewPlay();
+    };
+    mediaRecorders = [rec1];
+    rec1.start(100);
+    previewSeek(0);
+    previewPlay();
+
+  } else if (layer === 'route') {
+    toast('렌더링: 동선만 녹화 중...');
+    hideMapTiles(true);
+    setRouteVisibility(true);
+    const stream = canvas.captureStream(fps);
+    const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 12000000 });
+    recordedChunks['route'] = [];
+    rec.ondataavailable = e => { if (e.data.size > 0) recordedChunks['route'].push(e.data); };
+    rec.onstop = () => { saveRecording('route'); hideMapTiles(false); };
+    mediaRecorders.push(rec);
+    rec.start(100);
+    previewSeek(0);
+    previewPlay();
+
+  } else if (layer === 'map') {
+    toast('렌더링: 지도만 녹화 중...');
+    setRouteVisibility(false);
+    resetRouteProgress();
     const stream = canvas.captureStream(fps);
     const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 12000000 });
     recordedChunks['map'] = [];
     rec.ondataavailable = e => { if (e.data.size > 0) recordedChunks['map'].push(e.data); };
-    rec.onstop = () => saveRecording(layer === 'composite' ? 'composite' : 'map');
+    rec.onstop = () => { saveRecording('map'); setRouteVisibility(true); resetRouteProgress(); };
     mediaRecorders.push(rec);
     rec.start(100);
-  }
+    previewSeek(0);
+    previewPlay();
 
-  previewSeek(0);
-  previewPlay();
+  } else {
+    // composite
+    toast('렌더링: 합성 녹화 중...');
+    const stream = canvas.captureStream(fps);
+    const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 12000000 });
+    recordedChunks['composite'] = [];
+    rec.ondataavailable = e => { if (e.data.size > 0) recordedChunks['composite'].push(e.data); };
+    rec.onstop = () => saveRecording('composite');
+    mediaRecorders.push(rec);
+    rec.start(100);
+    previewSeek(0);
+    previewPlay();
+  }
+}
+
+// 지도 타일 레이어 숨기기/보이기 (동선만 녹화 시 배경 제거)
+function hideMapTiles(hide) {
+  const style = map.getStyle();
+  if (!style || !style.layers) return;
+  style.layers.forEach(layer => {
+    if (layer.type === 'raster') {
+      map.setPaintProperty(layer.id, 'raster-opacity', hide ? 0 : 1);
+    }
+  });
+  // canvas 배경도 투명하게
+  const c = map.getCanvas();
+  if (hide) {
+    c.style.background = 'transparent';
+    map.getContainer().style.background = 'transparent';
+  } else {
+    c.style.background = '';
+    map.getContainer().style.background = '';
+  }
 }
 
 function stopRecording() {
@@ -700,7 +781,7 @@ function stopRecording() {
 }
 
 function saveRecording(name) {
-  const chunks = recordedChunks[name === 'composite' ? 'map' : name];
+  const chunks = recordedChunks[name];
   if (!chunks || !chunks.length) return;
   const blob = new Blob(chunks, { type: 'video/webm' });
   const url = URL.createObjectURL(blob);
