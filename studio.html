@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>배달동선 스튜디오</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#e0e0e0;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+
+/* 상단 툴바 */
+#toolbar{height:44px;background:#16213e;display:flex;align-items:center;padding:0 16px;gap:12px;border-bottom:1px solid #2a2a4a;flex-shrink:0}
+#toolbar h1{font-size:14px;font-weight:600;color:#fff;margin-right:auto}
+#toolbar button{background:#0f3460;color:#e0e0e0;border:1px solid #2a4a7a;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s}
+#toolbar button:hover{background:#1a5276;border-color:#4a8abf}
+#toolbar button.primary{background:#e94560;border-color:#e94560;color:#fff}
+#toolbar button.primary:hover{background:#c0392b}
+#toolbar button.recording{background:#e74c3c;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+#toolbar .sep{width:1px;height:24px;background:#2a2a4a}
+#toolbar select{background:#0f3460;color:#e0e0e0;border:1px solid #2a4a7a;padding:5px 8px;border-radius:5px;font-size:12px;font-family:inherit}
+
+/* 메인 영역 */
+#main{flex:1;display:flex;overflow:hidden}
+
+/* 왼쪽: 뷰포트 */
+#viewport{flex:1;position:relative;background:#000}
+#map-container{width:100%;height:100%;position:relative}
+#map{width:100%;height:100%}
+#viewport-overlay{position:absolute;top:8px;left:8px;z-index:1000;font-size:11px;color:rgba(255,255,255,.7);pointer-events:none}
+#rec-indicator{display:none;position:absolute;top:12px;right:12px;z-index:1000;background:rgba(231,76,60,.9);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;animation:pulse 1s infinite}
+
+/* 오른쪽: 씬 패널 */
+#scene-panel{width:320px;background:#16213e;border-left:1px solid #2a2a4a;display:flex;flex-direction:column;flex-shrink:0}
+#scene-panel .sp-header{padding:12px 14px;border-bottom:1px solid #2a2a4a;display:flex;align-items:center;gap:8px}
+#scene-panel .sp-header h3{font-size:13px;font-weight:600;flex:1}
+#scene-panel .sp-header button{background:none;border:1px solid #2a4a7a;color:#aaa;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:11px}
+#scene-panel .sp-header button:hover{background:#0f3460;color:#fff}
+#scene-list{flex:1;overflow-y:auto;padding:8px}
+.scene-card{background:#0f3460;border:1px solid #2a4a7a;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+.scene-card:hover{border-color:#4a8abf}
+.scene-card.active{border-color:#e94560;background:#1a1a3e}
+.scene-card .sc-title{font-size:12px;font-weight:600;margin-bottom:4px}
+.scene-card .sc-meta{font-size:10px;color:#888;display:flex;gap:8px}
+.scene-card .sc-actions{display:flex;gap:4px;margin-top:6px}
+.scene-card .sc-actions button{background:none;border:1px solid #2a4a7a;color:#aaa;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:10px}
+.scene-card .sc-actions button:hover{color:#fff;border-color:#4a8abf}
+.scene-card .sc-actions button.del:hover{color:#e74c3c;border-color:#e74c3c}
+
+/* 씬 편집 */
+#scene-editor{display:none;padding:12px 14px;border-top:1px solid #2a2a4a;background:#0d1b2a;max-height:280px;overflow-y:auto}
+#scene-editor label{display:block;font-size:11px;color:#888;margin:8px 0 3px}
+#scene-editor input,#scene-editor select{width:100%;background:#16213e;border:1px solid #2a4a7a;color:#e0e0e0;padding:6px 8px;border-radius:5px;font-size:12px;font-family:inherit}
+#scene-editor .row{display:flex;gap:8px}
+#scene-editor .row>*{flex:1}
+
+/* 하단: 타임라인 */
+#timeline{height:100px;background:#0d1b2a;border-top:1px solid #2a2a4a;display:flex;flex-direction:column;flex-shrink:0}
+#tl-controls{height:32px;display:flex;align-items:center;padding:0 12px;gap:8px;border-bottom:1px solid #1a1a3e}
+#tl-controls button{background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;padding:2px 6px}
+#tl-controls button:hover{color:#fff}
+#tl-controls .tl-time{font-size:11px;color:#888;min-width:80px}
+#tl-controls .tl-duration{font-size:11px;color:#666;margin-left:auto}
+#tl-track{flex:1;position:relative;overflow-x:auto;padding:8px 12px}
+#tl-bar{height:100%;display:flex;align-items:stretch;gap:2px;min-width:100%}
+.tl-segment{height:40px;border-radius:4px;position:relative;display:flex;align-items:center;justify-content:center;font-size:10px;color:rgba(255,255,255,.8);cursor:pointer;min-width:40px;transition:all .15s}
+.tl-segment:hover{filter:brightness(1.2)}
+.tl-segment.active{outline:2px solid #e94560;outline-offset:1px}
+#tl-playhead{position:absolute;top:0;bottom:0;width:2px;background:#e94560;z-index:10;pointer-events:none;transition:left .05s linear}
+
+/* 토스트 */
+#toast{position:fixed;bottom:120px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;display:none;pointer-events:none}
+
+/* 출력 설정 모달 */
+#export-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:5000;align-items:center;justify-content:center}
+#export-modal.show{display:flex}
+#export-modal .em-box{background:#16213e;border-radius:12px;padding:24px;width:400px;border:1px solid #2a4a7a}
+#export-modal h3{font-size:15px;margin-bottom:16px}
+#export-modal label{display:block;font-size:11px;color:#888;margin:10px 0 3px}
+#export-modal input,#export-modal select{width:100%;background:#0f3460;border:1px solid #2a4a7a;color:#e0e0e0;padding:7px 10px;border-radius:6px;font-size:12px;font-family:inherit}
+#export-modal .em-row{display:flex;gap:10px}
+#export-modal .em-row>*{flex:1}
+#export-modal .em-btns{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+#export-modal .em-btns button{padding:8px 16px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-family:inherit}
+#export-modal .btn-render{background:#e94560;color:#fff}
+#export-modal .btn-cancel{background:#2a2a4a;color:#aaa}
+</style>
+</head><body>
+
+<div id="toolbar">
+  <h1>🎬 배달동선 스튜디오</h1>
+  <input type="file" id="csv-file" accept=".csv" style="font-size:11px;max-width:160px">
+  <div class="sep"></div>
+  <button id="btn-preview" onclick="previewPlay()">▶ 미리보기</button>
+  <button id="btn-stop" onclick="previewStop()">⏹ 정지</button>
+  <div class="sep"></div>
+  <select id="export-layer">
+    <option value="both">지도+동선 (합성)</option>
+    <option value="map">지도만</option>
+    <option value="route">동선만 (투명배경)</option>
+    <option value="separate">별도 파일 2개</option>
+  </select>
+  <button class="primary" onclick="showExportModal()">⏺ 렌더링</button>
+</div>
+
+<div id="main">
+  <div id="viewport">
+    <div id="map-container"><div id="map"></div></div>
+    <div id="viewport-overlay"><span id="vp-info"></span></div>
+    <div id="rec-indicator">⏺ REC</div>
+  </div>
+  <div id="scene-panel">
+    <div class="sp-header">
+      <h3>씬 목록</h3>
+      <button onclick="addScene()">+ 씬 추가</button>
+      <button onclick="captureCurrentAsScene()">📷 현재 뷰</button>
+    </div>
+    <div id="scene-list"></div>
+    <div id="scene-editor">
+      <label>씬 이름</label>
+      <input id="se-name" placeholder="예: 강남역 줌인" oninput="updateSceneField('name',this.value)">
+      <div class="row">
+        <div><label>위도</label><input id="se-lat" type="number" step="0.0001" oninput="updateSceneField('lat',+this.value)"></div>
+        <div><label>경도</label><input id="se-lng" type="number" step="0.0001" oninput="updateSceneField('lng',+this.value)"></div>
+      </div>
+      <div class="row">
+        <div><label>줌</label><input id="se-zoom" type="number" min="5" max="20" step="0.5" oninput="updateSceneField('zoom',+this.value)"></div>
+        <div><label>지속시간 (초)</label><input id="se-duration" type="number" min="0.5" max="60" step="0.5" oninput="updateSceneField('duration',+this.value)"></div>
+      </div>
+      <div class="row">
+        <div><label>전환 (초)</label><input id="se-transition" type="number" min="0" max="10" step="0.5" oninput="updateSceneField('transition',+this.value)"></div>
+        <div><label>이징</label>
+          <select id="se-easing" onchange="updateSceneField('easing',this.value)">
+            <option value="ease-in-out">ease-in-out</option>
+            <option value="ease-in">ease-in</option>
+            <option value="ease-out">ease-out</option>
+            <option value="linear">linear</option>
+          </select>
+        </div>
+      </div>
+      <label>동선 표시</label>
+      <select id="se-routes" onchange="updateSceneField('showRoutes',this.value==='true')">
+        <option value="true">표시</option>
+        <option value="false">숨김</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div id="timeline">
+  <div id="tl-controls">
+    <button onclick="previewPlay()" title="재생">▶</button>
+    <button onclick="previewStop()" title="정지">⏹</button>
+    <button onclick="previewSeek(0)" title="처음으로">⏮</button>
+    <span class="tl-time" id="tl-time">0:00.0 / 0:00.0</span>
+    <span class="tl-duration" id="tl-total"></span>
+  </div>
+  <div id="tl-track">
+    <div id="tl-bar"></div>
+    <div id="tl-playhead" style="left:0"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="export-modal">
+  <div class="em-box">
+    <h3>렌더링 설정</h3>
+    <div class="em-row">
+      <div><label>해상도</label>
+        <select id="ex-resolution">
+          <option value="1920x1080">1920×1080 (FHD)</option>
+          <option value="3840x2160">3840×2160 (4K)</option>
+          <option value="1280x720">1280×720 (HD)</option>
+          <option value="1080x1920">1080×1920 (세로)</option>
+        </select>
+      </div>
+      <div><label>FPS</label>
+        <select id="ex-fps">
+          <option value="30">30fps</option>
+          <option value="60">60fps</option>
+          <option value="24">24fps</option>
+        </select>
+      </div>
+    </div>
+    <label>출력 형식</label>
+    <select id="ex-format">
+      <option value="webm">WebM (VP9, 투명 지원)</option>
+      <option value="mp4">MP4 (H.264, 호환성 ↑)</option>
+    </select>
+    <label>레이어</label>
+    <select id="ex-layer">
+      <option value="both">지도+동선 합성</option>
+      <option value="map">지도만</option>
+      <option value="route">동선만 (투명배경)</option>
+      <option value="separate">별도 파일 2개</option>
+    </select>
+    <div class="em-btns">
+      <button class="btn-cancel" onclick="hideExportModal()">취소</button>
+      <button class="btn-render" onclick="startRender()">렌더링 시작</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@mapbox/polyline@1.2.1/src/polyline.js"></script>
+<script src="https://unpkg.com/deck.gl@9.1.4/dist.min.js"></script>
+<script>
+// ===== 전역 상태 =====
+let scenes = [];
+let activeSceneIdx = -1;
+let routeData = []; // CSV에서 로드된 경로 데이터
+let pathData = [], dotData = [], endpointData = [];
+let isPlaying = false;
+let playStartTime = 0;
+let playElapsed = 0;
+let playRAF = null;
+let isRecording = false;
+let mediaRecorders = [];
+let recordedChunks = {};
+
+// ===== Leaflet 초기화 =====
+const MAP_TILES = {
+  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  voyager: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+};
+const map = L.map('map', {zoomControl: false, zoomAnimation: true, fadeAnimation: true}).setView([37.5050, 127.0500], 13);
+let tileLayer = L.tileLayer(MAP_TILES.dark, {maxZoom: 19}).addTo(map);
+
+// deck.gl 오버레이
+const deckContainer = document.createElement('div');
+deckContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:450;';
+map.getContainer().appendChild(deckContainer);
+
+function getLeafletViewState() {
+  const c = map.getCenter();
+  return {longitude: c.lng, latitude: c.lat, zoom: map.getZoom() - 1, pitch: 0, bearing: 0};
+}
+
+const deckGL = new deck.Deck({
+  parent: deckContainer,
+  initialViewState: getLeafletViewState(),
+  controller: false, layers: [], width: '100%', height: '100%'
+});
+
+function syncDeckView() { deckGL.setProps({viewState: getLeafletViewState()}); }
+map.on('move', syncDeckView);
+map.on('zoom', syncDeckView);
+map.on('resize', syncDeckView);
+setTimeout(syncDeckView, 100);
+
+// 뷰포트 정보 표시
+function updateVPInfo() {
+  const c = map.getCenter();
+  document.getElementById('vp-info').textContent =
+    `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)} | z${map.getZoom().toFixed(1)}`;
+}
+map.on('move', updateVPInfo);
+map.on('zoom', updateVPInfo);
+updateVPInfo();
+
+// ===== 씬 관리 =====
+function addScene() {
+  const c = map.getCenter();
+  scenes.push({
+    name: '씬 ' + (scenes.length + 1),
+    lat: +c.lat.toFixed(5),
+    lng: +c.lng.toFixed(5),
+    zoom: map.getZoom(),
+    duration: 3,
+    transition: 2,
+    easing: 'ease-in-out',
+    showRoutes: true
+  });
+  renderSceneList();
+  selectScene(scenes.length - 1);
+  renderTimeline();
+}
+
+function captureCurrentAsScene() {
+  addScene();
+  toast('현재 뷰를 씬으로 추가했습니다');
+}
+
+function selectScene(idx) {
+  activeSceneIdx = idx;
+  renderSceneList();
+  if (idx >= 0 && idx < scenes.length) {
+    const s = scenes[idx];
+    document.getElementById('se-name').value = s.name;
+    document.getElementById('se-lat').value = s.lat;
+    document.getElementById('se-lng').value = s.lng;
+    document.getElementById('se-zoom').value = s.zoom;
+    document.getElementById('se-duration').value = s.duration;
+    document.getElementById('se-transition').value = s.transition;
+    document.getElementById('se-easing').value = s.easing;
+    document.getElementById('se-routes').value = s.showRoutes ? 'true' : 'false';
+    document.getElementById('scene-editor').style.display = 'block';
+    map.flyTo([s.lat, s.lng], s.zoom, {duration: 0.8});
+  } else {
+    document.getElementById('scene-editor').style.display = 'none';
+  }
+}
+
+function updateSceneField(field, value) {
+  if (activeSceneIdx < 0) return;
+  scenes[activeSceneIdx][field] = value;
+  renderSceneList();
+  renderTimeline();
+}
+
+function deleteScene(idx) {
+  scenes.splice(idx, 1);
+  if (activeSceneIdx >= scenes.length) activeSceneIdx = scenes.length - 1;
+  renderSceneList();
+  renderTimeline();
+  selectScene(activeSceneIdx);
+}
+
+function moveScene(idx, dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= scenes.length) return;
+  [scenes[idx], scenes[newIdx]] = [scenes[newIdx], scenes[idx]];
+  activeSceneIdx = newIdx;
+  renderSceneList();
+  renderTimeline();
+}
+
+function renderSceneList() {
+  const el = document.getElementById('scene-list');
+  el.innerHTML = scenes.map((s, i) => `
+    <div class="scene-card ${i === activeSceneIdx ? 'active' : ''}" onclick="selectScene(${i})">
+      <div class="sc-title">${s.name}</div>
+      <div class="sc-meta">
+        <span>${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span>
+        <span>z${s.zoom}</span>
+        <span>${s.duration}s</span>
+      </div>
+      <div class="sc-actions">
+        <button onclick="event.stopPropagation();moveScene(${i},-1)">↑</button>
+        <button onclick="event.stopPropagation();moveScene(${i},1)">↓</button>
+        <button onclick="event.stopPropagation();map.flyTo([${s.lat},${s.lng}],${s.zoom},{duration:0.8})">👁</button>
+        <button class="del" onclick="event.stopPropagation();deleteScene(${i})">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ===== 타임라인 =====
+function getTotalDuration() {
+  return scenes.reduce((sum, s) => sum + s.duration + s.transition, 0);
+}
+
+function renderTimeline() {
+  const bar = document.getElementById('tl-bar');
+  const total = getTotalDuration();
+  const colors = ['#e94560', '#0f3460', '#533483', '#1a5276', '#6c3483', '#1e8449', '#d35400'];
+  bar.innerHTML = scenes.map((s, i) => {
+    const segW = total > 0 ? ((s.duration + s.transition) / total * 100) : 0;
+    const color = colors[i % colors.length];
+    return `<div class="tl-segment ${i === activeSceneIdx ? 'active' : ''}"
+      style="width:${segW}%;background:${color}" onclick="selectScene(${i})">${s.name}</div>`;
+  }).join('');
+  document.getElementById('tl-total').textContent = `총 ${total.toFixed(1)}초`;
+  updateTimeDisplay(playElapsed);
+}
+
+function updateTimeDisplay(elapsed) {
+  const total = getTotalDuration();
+  const fmt = t => {
+    const m = Math.floor(t / 60);
+    const s = (t % 60).toFixed(1);
+    return `${m}:${s.padStart(4, '0')}`;
+  };
+  document.getElementById('tl-time').textContent = `${fmt(elapsed)} / ${fmt(total)}`;
+  // playhead 위치
+  const pct = total > 0 ? (elapsed / total * 100) : 0;
+  document.getElementById('tl-playhead').style.left = Math.min(pct, 100) + '%';
+}
+
+// ===== 이징 함수 =====
+function easingFn(name, t) {
+  switch (name) {
+    case 'ease-in': return t * t;
+    case 'ease-out': return 1 - (1 - t) * (1 - t);
+    case 'ease-in-out': return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    default: return t;
+  }
+}
+
+// ===== 미리보기 재생 =====
+function getStateAtTime(t) {
+  if (scenes.length === 0) return null;
+  let elapsed = 0;
+  for (let i = 0; i < scenes.length; i++) {
+    const s = scenes[i];
+    const segDur = s.duration + s.transition;
+    if (t <= elapsed + segDur) {
+      const localT = t - elapsed;
+      // 이 씬의 transition 구간인지 hold 구간인지
+      if (localT <= s.transition && i > 0) {
+        // 이전 씬에서 이 씬으로 전환 중
+        const prev = scenes[i - 1];
+        const progress = s.transition > 0 ? easingFn(s.easing, localT / s.transition) : 1;
+        return {
+          lat: prev.lat + (s.lat - prev.lat) * progress,
+          lng: prev.lng + (s.lng - prev.lng) * progress,
+          zoom: prev.zoom + (s.zoom - prev.zoom) * progress,
+          showRoutes: s.showRoutes,
+          sceneIdx: i
+        };
+      } else {
+        // hold 구간
+        return {lat: s.lat, lng: s.lng, zoom: s.zoom, showRoutes: s.showRoutes, sceneIdx: i};
+      }
+    }
+    elapsed += segDur;
+  }
+  // 끝
+  const last = scenes[scenes.length - 1];
+  return {lat: last.lat, lng: last.lng, zoom: last.zoom, showRoutes: last.showRoutes, sceneIdx: scenes.length - 1};
+}
+
+function previewPlay() {
+  if (scenes.length === 0) { toast('씬을 추가하세요'); return; }
+  if (isPlaying) return;
+  isPlaying = true;
+  const total = getTotalDuration();
+  playStartTime = performance.now() - playElapsed * 1000;
+
+  function tick() {
+    if (!isPlaying) return;
+    const now = performance.now();
+    playElapsed = (now - playStartTime) / 1000;
+    if (playElapsed >= total) {
+      playElapsed = total;
+      isPlaying = false;
+      updateTimeDisplay(playElapsed);
+      if (isRecording) stopRecording();
+      return;
+    }
+    const state = getStateAtTime(playElapsed);
+    if (state) {
+      map.setView([state.lat, state.lng], state.zoom, {animate: false});
+      updateRouteVisibility(state.showRoutes);
+    }
+    updateTimeDisplay(playElapsed);
+    playRAF = requestAnimationFrame(tick);
+  }
+  playRAF = requestAnimationFrame(tick);
+}
+
+function previewStop() {
+  isPlaying = false;
+  if (playRAF) cancelAnimationFrame(playRAF);
+  if (isRecording) stopRecording();
+}
+
+function previewSeek(t) {
+  playElapsed = t;
+  playStartTime = performance.now() - t * 1000;
+  const state = getStateAtTime(t);
+  if (state) map.setView([state.lat, state.lng], state.zoom, {animate: false});
+  updateTimeDisplay(t);
+}
+
+// ===== 동선 가시성 =====
+function updateRouteVisibility(show) {
+  deckContainer.style.opacity = show ? '1' : '0';
+}
+
+// ===== 경로 렌더링 (CSV 로드 시) =====
+const PALETTE = ['#4dd0e1','#81c784','#aed581','#fff176','#4fc3f7','#80deea','#a5d6a7','#c5e1a5','#dce775','#fff59d',
+  '#f48fb1','#ce93d8','#b39ddb','#9fa8da','#90caf9','#80cbc4','#ef9a9a','#ffcc80','#ffe082','#ffab91'];
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const header = lines[0].replace(/["\uFEFF]/g, '').split(',');
+  return lines.slice(1).map(line => {
+    const vals = line.replace(/"/g, '').split(',');
+    const obj = {};
+    header.forEach((h, i) => obj[h.trim()] = vals[i]?.trim());
+    return obj;
+  });
+}
+
+async function getRoute(slat, slon, dlat, dlon) {
+  try {
+    const r = await fetch(`https://solebal.synology.me:5052/route/v1/driving/${slon},${slat};${dlon},${dlat}?overview=full&geometries=polyline`);
+    const j = await r.json();
+    if (j.code === 'Ok') return {coords: polyline.decode(j.routes[0].geometry), dist: j.routes[0].distance};
+  } catch (e) {}
+  return null;
+}
+
+document.getElementById('csv-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  toast('CSV 로딩 중...');
+  const text = await file.text();
+  let rows = parseCSV(text).filter(r => r.shop_lat && r.dlvry_lat);
+  // 최대 200건으로 제한 (스튜디오용)
+  if (rows.length > 200) rows = rows.slice(0, 200);
+
+  pathData = []; dotData = []; endpointData = [];
+  let done = 0;
+
+  for (const [i, r] of rows.entries()) {
+    const slat = parseFloat(r.shop_lat), slon = parseFloat(r.shop_lon);
+    const dlat = parseFloat(r.dlvry_lat), dlon = parseFloat(r.dlvry_lon);
+    const rt = await getRoute(slat, slon, dlat, dlon);
+    if (!rt) continue;
+
+    const color = PALETTE[i % PALETTE.length];
+    const rgb = hexToRgb(color);
+    const path = rt.coords.map(c => [c[1], c[0]]);
+    pathData.push({path, color: rgb, width: 4, groupId: 'g' + i, tipText: '#' + (i + 1)});
+    endpointData.push({position: [slon, slat], color: rgb, radius: 5, groupId: 'g' + i});
+    endpointData.push({position: [dlon, dlat], color: rgb, radius: 5, groupId: 'g' + i});
+    done++;
+    if (done % 10 === 0) toast(`경로 로딩: ${done}/${rows.length}`);
+  }
+
+  updateDeckLayers();
+  if (pathData.length > 0) {
+    const allCoords = pathData.flatMap(p => p.path);
+    const bounds = L.latLngBounds(allCoords.map(c => [c[1], c[0]]));
+    map.fitBounds(bounds, {padding: [60, 60]});
+  }
+  toast(`${done}건 경로 로드 완료`);
+});
+
+function updateDeckLayers() {
+  const layers = [];
+  if (pathData.length) {
+    layers.push(new deck.PathLayer({
+      id: 'paths',
+      data: pathData,
+      getPath: d => d.path,
+      getColor: d => [...d.color, 220],
+      getWidth: d => d.width,
+      widthUnits: 'pixels', widthMinPixels: 1, widthMaxPixels: 20,
+      jointRounded: true, capRounded: true
+    }));
+  }
+  if (endpointData.length) {
+    layers.push(new deck.ScatterplotLayer({
+      id: 'endpoints',
+      data: endpointData,
+      getPosition: d => d.position,
+      getFillColor: d => [...d.color, 255],
+      getRadius: d => d.radius,
+      radiusUnits: 'pixels', radiusMinPixels: 2, radiusMaxPixels: 12,
+      stroked: true, getLineColor: [50, 50, 50, 200], getLineWidth: 1.5, lineWidthUnits: 'pixels'
+    }));
+  }
+  deckGL.setProps({layers, viewState: getLeafletViewState()});
+}
+
+// ===== 녹화 (MediaRecorder) =====
+function showExportModal() {
+  if (scenes.length === 0) { toast('씬을 먼저 추가하세요'); return; }
+  document.getElementById('export-modal').classList.add('show');
+}
+function hideExportModal() { document.getElementById('export-modal').classList.remove('show'); }
+
+async function startRender() {
+  hideExportModal();
+  const resolution = document.getElementById('ex-resolution').value.split('x').map(Number);
+  const fps = +document.getElementById('ex-fps').value;
+  const format = document.getElementById('ex-format').value;
+  const layer = document.getElementById('ex-layer').value;
+
+  // 뷰포트 크기 조절은 복잡하므로 현재 뷰포트 크기로 캡처
+  toast('렌더링 시작... 재생이 끝나면 자동 저장됩니다');
+
+  isRecording = true;
+  document.getElementById('rec-indicator').style.display = 'block';
+  recordedChunks = {};
+  mediaRecorders = [];
+
+  const mimeType = format === 'webm' ? 'video/webm;codecs=vp9' : 'video/webm;codecs=h264';
+
+  if (layer === 'separate' || layer === 'both' || layer === 'map') {
+    // 지도 캔버스 캡처
+    const mapCanvas = await getMapCanvas();
+    if (mapCanvas) {
+      const stream = mapCanvas.captureStream(fps);
+      const rec = new MediaRecorder(stream, {mimeType, videoBitsPerSecond: 8000000});
+      recordedChunks['map'] = [];
+      rec.ondataavailable = e => { if (e.data.size > 0) recordedChunks['map'].push(e.data); };
+      rec.onstop = () => saveRecording('map', format);
+      mediaRecorders.push(rec);
+      rec.start(100);
+    }
+  }
+
+  if (layer === 'separate' || layer === 'both' || layer === 'route') {
+    // deck.gl 캔버스 캡처
+    const deckCanvas = deckContainer.querySelector('canvas');
+    if (deckCanvas) {
+      const stream = deckCanvas.captureStream(fps);
+      const rec = new MediaRecorder(stream, {mimeType, videoBitsPerSecond: 8000000});
+      recordedChunks['route'] = [];
+      rec.ondataavailable = e => { if (e.data.size > 0) recordedChunks['route'].push(e.data); };
+      rec.onstop = () => saveRecording('route', format);
+      mediaRecorders.push(rec);
+      rec.start(100);
+    }
+  }
+
+  // 합성 캡처 (전체 viewport)
+  if (layer === 'both') {
+    const viewport = document.getElementById('map-container');
+    // html2canvas 대신 전체 맵 컨테이너의 캔버스를 합성
+    try {
+      const compositeCanvas = document.createElement('canvas');
+      compositeCanvas.width = viewport.offsetWidth;
+      compositeCanvas.height = viewport.offsetHeight;
+      const ctx = compositeCanvas.getContext('2d');
+
+      const stream = compositeCanvas.captureStream(fps);
+      const rec = new MediaRecorder(stream, {mimeType, videoBitsPerSecond: 8000000});
+      recordedChunks['composite'] = [];
+      rec.ondataavailable = e => { if (e.data.size > 0) recordedChunks['composite'].push(e.data); };
+      rec.onstop = () => saveRecording('composite', format);
+      mediaRecorders.push(rec);
+      rec.start(100);
+
+      // 프레임별 합성
+      const compositeInterval = setInterval(async () => {
+        if (!isRecording) { clearInterval(compositeInterval); return; }
+        const mapC = await getMapCanvas();
+        if (mapC) ctx.drawImage(mapC, 0, 0, compositeCanvas.width, compositeCanvas.height);
+        const deckC = deckContainer.querySelector('canvas');
+        if (deckC) ctx.drawImage(deckC, 0, 0, compositeCanvas.width, compositeCanvas.height);
+      }, 1000 / fps);
+    } catch (e) { console.warn('composite recording failed:', e); }
+  }
+
+  // 재생 시작
+  previewSeek(0);
+  previewPlay();
+}
+
+function stopRecording() {
+  isRecording = false;
+  document.getElementById('rec-indicator').style.display = 'none';
+  mediaRecorders.forEach(rec => { if (rec.state === 'recording') rec.stop(); });
+  toast('렌더링 완료! 파일 저장 중...');
+}
+
+function saveRecording(name, format) {
+  const chunks = recordedChunks[name];
+  if (!chunks || !chunks.length) return;
+  const ext = format === 'mp4' ? 'webm' : 'webm'; // 브라우저는 webm만 native 지원
+  const blob = new Blob(chunks, {type: 'video/webm'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `delivery_studio_${name}_${Date.now()}.${ext}`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`${name} 영상 저장됨`);
+}
+
+async function getMapCanvas() {
+  // Leaflet 타일들을 하나의 canvas로 합성
+  const container = map.getContainer();
+  const tiles = container.querySelectorAll('.leaflet-tile-loaded');
+  if (!tiles.length) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = container.offsetWidth;
+  canvas.height = container.offsetHeight;
+  const ctx = canvas.getContext('2d');
+
+  // 배경
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const mapPane = container.querySelector('.leaflet-map-pane');
+  const transform = getComputedStyle(mapPane).transform;
+  let tx = 0, ty = 0;
+  if (transform && transform !== 'none') {
+    const m = transform.match(/matrix\(([^)]+)\)/);
+    if (m) {
+      const vals = m[1].split(',').map(Number);
+      tx = vals[4]; ty = vals[5];
+    }
+  }
+
+  tiles.forEach(tile => {
+    try {
+      const tileContainer = tile.parentElement;
+      const tcTransform = getComputedStyle(tileContainer).transform;
+      let tcx = 0, tcy = 0;
+      if (tcTransform && tcTransform !== 'none') {
+        const m2 = tcTransform.match(/matrix\(([^)]+)\)/);
+        if (m2) { const v = m2[1].split(',').map(Number); tcx = v[4]; tcy = v[5]; }
+      }
+      const x = tile.offsetLeft + tcx + tx;
+      const y = tile.offsetTop + tcy + ty;
+      ctx.drawImage(tile, x, y, tile.width, tile.height);
+    } catch (e) {}
+  });
+
+  return canvas;
+}
+
+// ===== 유틸 =====
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.display = 'none', 3000);
+}
+
+// 초기 렌더
+renderSceneList();
+renderTimeline();
+</script>
+</body></html>
