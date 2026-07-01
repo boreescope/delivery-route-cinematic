@@ -1,0 +1,22 @@
+stages:
+  - packaging
+
+variables:
+  BUILDKIT_IMAGE_VERSION: "0.9.1"
+
+containerize:
+  stage: packaging
+  image: wcr.baemin.in/platform/buildkit:$BUILDKIT_IMAGE_VERSION
+  tags:
+    - docker
+  before_script:
+    - unset DOCKER_DEFAULT_PLATFORM
+  script:
+    - |
+      docker build \
+        --push \
+        --tag wcr.baemin.in/creative-ai-delivery-route/delivery-route-web:${CI_COMMIT_SHORT_SHA} \
+        --tag wcr.baemin.in/creative-ai-delivery-route/delivery-route-web:latest \
+        .
+  only:
+    - dosomething-cinematic
